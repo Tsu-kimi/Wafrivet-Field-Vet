@@ -1,0 +1,74 @@
+# infra/field-vet-config.yaml
+# ────────────────────────────
+# Cloud Deployment Manager configuration for the fieldvet-backend Cloud Run
+# service.  This file passes environment-specific parameter values into the
+# field-vet-cloudrun.jinja template.
+#
+# Apply with:
+#   gcloud deployment-manager deployments create fieldvet-prod \
+#     --config infra/field-vet-config.yaml \
+#     --project wafrivet-agent
+#
+# Update with:
+#   gcloud deployment-manager deployments update fieldvet-prod \
+#     --config infra/field-vet-config.yaml \
+#     --project wafrivet-agent
+
+imports:
+- path: field-vet-cloudrun.jinja
+
+resources:
+- name: fieldvet-backend
+  type: field-vet-cloudrun.jinja
+  properties:
+    # ── Cloud Run service identity ─────────────────────────────────────────
+    serviceName: fieldvet-backend
+    region: us-central1
+
+    # Full Artifact Registry image path.
+    # Update the tag to the desired semantic version or git SHA before deploying.
+    image: us-central1-docker.pkg.dev/wafrivet-agent/fieldvet-images/backend:latest
+
+    # Service account that Cloud Run instances run as.
+    # Must have: roles/secretmanager.secretAccessor (per-secret), roles/aiplatform.user
+    serviceAccountName: fieldvet-backend@wafrivet-agent.iam.gserviceaccount.com
+
+    # ── WebSocket-optimised Cloud Run settings ─────────────────────────────
+    # Maximum request duration = maximum WebSocket session lifetime.
+    # Cloud Run maximum is 3600 seconds (60 minutes).
+    timeoutSeconds: 3600
+
+    # Minimum warm instances.  1 ensures there is always a ready container;
+    # scale-to-zero would terminate every active WebSocket connection.
+    minInstances: 1
+
+    # Maximum concurrent WebSocket connections per instance before Cloud Run
+    # spins up an additional instance.
+    concurrency: 1000
+
+    # ── Health probe tuning ────────────────────────────────────────────────
+    # Seconds before the first startup probe attempt.
+    # ADK runner + Supabase client initialise in < 10 s on a warm base image.
+    startupInitialDelay: 10
+
+    # Number of consecutive startup probe failures before Cloud Run kills the
+    # container and tries a new revision.  5 failures × 10 s period = 50 s
+    # maximum cold-start budget (generous for ADK initialisation on Cloud Run).
+    startupFailureLimit: 5
+
+    # ── Secret Manager references ─────────────────────────────────────────
+    # Each entry maps an environment variable name (as used in Phase 3 Python
+    # code) to a Secret Manager secret name in the wafrivet-agent project.
+    # The Cloud Run SA must have roles/secretmanager.secretAccessor on each
+    # secret individually.  Secrets are mounted as env vars at container start.
+    secrets:
+    - envName: GOOGLE_API_KEY
+      secretName: GOOGLE_API_KEY
+    - envName: SUPABASE_URL
+      secretName: SUPABASE_URL
+    - envName: SUPABASE_SERVICE_ROLE_KEY
+      secretName: SUPABASE_SERVICE_ROLE_KEY
+    - envName: PAYSTACK_SECRET_KEY
+      secretName: PAYSTACK_SECRET_KEY
+    - envName: GOOGLE_CLOUD_PROJECT
+      secretName: GOOGLE_CLOUD_PROJECT

@@ -1,0 +1,374 @@
+"""
+backend/streaming/bridge.py
+
+Bidirectional streaming bridge: WebSocket ↔ ADK run_live() ↔ Gemini Live API.
+
+Architecture
+────────────
+Each connected WebSocket spawns two concurrent tasks:
+
+  upstream_task   — reads messages from the browser and forwards them into the
+                    LiveRequestQueue. Binary frames are treated as 16-bit PCM
+                    audio at 16 kHz. Text frames are parsed as JSON and may
+                    carry a base64-encoded JPEG frame or a raw text message.
+
+  downstream_task — iterates the run_live() async generator, applies the
+                    is_interrupted state machine, and sends structured JSON
+                    events (plus raw binary audio) back to the browser.
+
+Interruption state machine
+──────────────────────────
+  is_interrupted is set to True when event.interrupted is received.
+  While True:
+    - Audio inline_data events are discarded (do not forward stale audio)
+    - AUDIO_FLUSH is sent to the browser immediately on first interrupt
+  is_interrupted is reset to False when event.turn_complete is received.
+
+Tool-response routing
+─────────────────────
+ADK executes all five tools automatically.  The downstream task intercepts
+function_response events and maps each tool to the appropriate frontend event:
+
+  search_disease_matches  → no UI event (agent narrates results in audio)
+  recommend_products      → PRODUCTS_RECOMMENDED
+  manage_cart             → CART_UPDATED
+  generate_checkout_link  → CHECKOUT_LINK
+  update_location         → LOCATION_CONFIRMED
+
+Logger contract
+───────────────
+Every log record carries: session_id, user_id, event_type.
+The elapsed_ms field is the milliseconds since run_bridge() was called.
+"""
+from __future__ import annotations
+
+import asyncio
+import base64
+import json
+import logging
+import time
+from typing import Any
+
+from fastapi import WebSocket, WebSocketDisconnect
+from google.adk.agents.live_request_queue import LiveRequestQueue
+from google.adk.runners import Runner
+from google.adk.sessions import InMemorySessionService
+from google.genai import types
+
+from backend.streaming.events import (
+    audio_flush_event,
+    cart_updated_event,
+    checkout_link_event,
+    location_confirmed_event,
+    products_recommended_event,
+    tool_error_event,
+    transcription_event,
+    turn_complete_event,
+)
+
+logger = logging.getLogger("wafrivet.streaming.bridge")
+
+# MIME type expected by Gemini Live for raw PCM audio from the browser
+_AUDIO_MIME = "audio/pcm;rate=16000"
+
+
+# ---------------------------------------------------------------------------
+# Public entry point
+# ---------------------------------------------------------------------------
+
+async def run_bridge(
+    websocket: WebSocket,
+    user_id: str,
+    session_id: str,
+    runner: Runner,
+    session_service: InMemorySessionService,
+    run_config: Any,
+) -> None:
+    """
+    Manage the full lifetime of one WebSocket streaming session.
+
+    Raises nothing — all exceptions are caught internally; the WebSocket is
+    closed in the finally block.
+    """
+    start_ns = time.monotonic_ns()
+    live_request_queue: LiveRequestQueue = LiveRequestQueue()
+    log_ctx = {"user_id": user_id, "session_id": session_id}
+
+    def _log(level: str, msg: str, event_type: str = "-", **kw: Any) -> None:
+        elapsed_ms = (time.monotonic_ns() - start_ns) // 1_000_000
+        exc_info = kw.pop("exc_info", False)  # must not land in extra — logging owns this kwarg
+        getattr(logger, level)(
+            msg,
+            exc_info=exc_info,
+            extra={**log_ctx, "event_type": event_type, "elapsed_ms": elapsed_ms, **kw},
+        )
+
+    _log("info", "bridge started")
+
+    # ------------------------------------------------------------------
+    # Upstream: WebSocket → LiveRequestQueue
+    # ------------------------------------------------------------------
+    async def upstream_task() -> None:
+        try:
+            while True:
+                message = await websocket.receive()
+
+                if message["type"] == "websocket.disconnect":
+                    _log("info", "client disconnected (upstream)", "DISCONNECT")
+                    break
+
+                if "bytes" in message and message["bytes"] is not None:
+                    # Binary frame → raw PCM audio chunk
+                    audio_bytes: bytes = message["bytes"]
+                    blob = types.Blob(mime_type=_AUDIO_MIME, data=audio_bytes)
+                    live_request_queue.send_realtime(blob)
+                    _log("debug", "sent audio chunk", "AUDIO_IN", bytes=len(audio_bytes))
+
+                elif "text" in message and message["text"] is not None:
+                    # Text frame → JSON envelope
+                    try:
+                        payload: dict = json.loads(message["text"])
+                    except json.JSONDecodeError as exc:
+                        _log("warning", f"invalid JSON from client: {exc}", "BAD_JSON")
+                        continue
+
+                    msg_type = payload.get("type", "")
+
+                    if msg_type == "IMAGE":
+                        # base64-encoded JPEG video frame
+                        raw_b64: str = payload.get("data", "")
+                        if raw_b64:
+                            image_bytes = base64.b64decode(raw_b64)
+                            blob = types.Blob(mime_type="image/jpeg", data=image_bytes)
+                            live_request_queue.send_realtime(blob)
+                            _log("debug", "sent image frame", "IMAGE_IN")
+
+                    elif msg_type == "TEXT":
+                        # Text message (fallback for non-audio clients)
+                        text_body: str = payload.get("text", "").strip()
+                        if text_body:
+                            content = types.Content(
+                                parts=[types.Part(text=text_body)],
+                                role="user",
+                            )
+                            live_request_queue.send_content(content)
+                            _log("debug", "sent text message", "TEXT_IN")
+
+                    else:
+                        _log("warning", f"unknown message type: {msg_type!r}", "UNKNOWN_MSG")
+
+        except WebSocketDisconnect:
+            _log("info", "WebSocket disconnected during upstream", "DISCONNECT")
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            _log("error", f"upstream error: {exc}", "UPSTREAM_ERR")
+        finally:
+            # Signal run_live() to stop once upstream ends
+            live_request_queue.close()
+
+    # ------------------------------------------------------------------
+    # Downstream: run_live() → WebSocket
+    # ------------------------------------------------------------------
+    async def downstream_task() -> None:
+        is_interrupted = False
+
+        try:
+            async for event in runner.run_live(
+                user_id=user_id,
+                session_id=session_id,
+                live_request_queue=live_request_queue,
+                run_config=run_config,
+            ):
+                # ── Priority 1: Model / connection error ──────────────────
+                if event.error_code:
+                    _log(
+                        "error",
+                        f"model error {event.error_code}: {event.error_message}",
+                        "MODEL_ERR",
+                    )
+                    terminal_codes = {"SAFETY", "PROHIBITED_CONTENT", "BLOCKLIST", "MAX_TOKENS", "CANCELLED"}
+                    if event.error_code in terminal_codes:
+                        await websocket.send_json(
+                            {"type": "ERROR", "code": event.error_code, "message": event.error_message}
+                        )
+                        break
+                    # Transient error — keep processing
+                    continue
+
+                # ── Priority 2: Interruption ─────────────────────────────
+                if event.interrupted:
+                    if not is_interrupted:
+                        is_interrupted = True
+                        await websocket.send_json(audio_flush_event())
+                        _log("info", "interruption detected → AUDIO_FLUSH sent", "AUDIO_FLUSH")
+                    continue
+
+                # ── Priority 3: Turn complete ────────────────────────────
+                if event.turn_complete:
+                    is_interrupted = False
+                    await websocket.send_json(turn_complete_event())
+                    _log("info", "turn complete", "TURN_COMPLETE")
+                    continue
+
+                # ── While interrupted: discard content events ────────────
+                if is_interrupted:
+                    continue
+
+                # ── Priority 4: Transcription ────────────────────────────
+                input_tr = getattr(event, "input_transcription", None)
+                if input_tr:
+                    text_val = input_tr.text if hasattr(input_tr, "text") else str(input_tr)
+                    is_final = not getattr(input_tr, "is_partial", False)
+                    await websocket.send_json(
+                        transcription_event(text=text_val, author="user", is_final=is_final)
+                    )
+                    _log("debug", "input transcription", "TRANSCRIPTION_IN")
+
+                output_tr = getattr(event, "output_transcription", None)
+                if output_tr:
+                    text_val = output_tr.text if hasattr(output_tr, "text") else str(output_tr)
+                    is_final = not getattr(output_tr, "is_partial", False)
+                    await websocket.send_json(
+                        transcription_event(
+                            text=text_val,
+                            author=event.author or "agent",
+                            is_final=is_final,
+                        )
+                    )
+                    _log("debug", "output transcription", "TRANSCRIPTION_OUT")
+
+                # ── Priority 5: Audio inline_data ────────────────────────
+                if event.content and event.content.parts:
+                    for part in event.content.parts:
+                        if part.inline_data and part.inline_data.data:
+                            # Send raw PCM as binary WebSocket frame for low latency
+                            await websocket.send_bytes(part.inline_data.data)
+                            _log(
+                                "debug",
+                                "sent audio chunk to client",
+                                "AUDIO_OUT",
+                                bytes=len(part.inline_data.data),
+                            )
+
+                # ── Priority 6: Tool function responses ──────────────────
+                fn_responses = event.get_function_responses() if hasattr(event, "get_function_responses") else []
+                for fn_resp in (fn_responses or []):
+                    fn_name: str = fn_resp.name or ""
+                    await _route_tool_response(
+                        websocket=websocket,
+                        tool_name=fn_name,
+                        response=fn_resp.response,
+                        log_fn=_log,
+                    )
+
+        except WebSocketDisconnect:
+            _log("info", "WebSocket disconnected during downstream", "DISCONNECT")
+        except asyncio.CancelledError:
+            pass
+        except Exception as exc:
+            _log("error", f"downstream error: {exc}", "DOWNSTREAM_ERR", exc_info=True)
+        finally:
+            live_request_queue.close()
+
+    # ------------------------------------------------------------------
+    # Run both tasks concurrently
+    # ------------------------------------------------------------------
+    up_task   = asyncio.create_task(upstream_task(), name=f"upstream-{session_id}")
+    down_task = asyncio.create_task(downstream_task(), name=f"downstream-{session_id}")
+
+    try:
+        done, pending = await asyncio.wait(
+            [up_task, down_task],
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        for t in pending:
+            t.cancel()
+            try:
+                await t
+            except (asyncio.CancelledError, Exception):
+                pass
+    finally:
+        live_request_queue.close()
+        _log("info", "bridge closed")
+
+
+# ---------------------------------------------------------------------------
+# Tool-response router
+# ---------------------------------------------------------------------------
+
+async def _route_tool_response(
+    websocket: WebSocket,
+    tool_name: str,
+    response: Any,
+    log_fn: Any,
+) -> None:
+    """
+    Inspect a tool function response and send the corresponding UI event.
+
+    Tool response shapes (all wrap status + data + message):
+        recommend_products      → data.products [list]
+        manage_cart             → data.cart_total, data.items [list]
+        generate_checkout_link  → data.checkout_url, data.payment_reference
+        update_location         → data.state (str)
+        search_disease_matches  → no UI event (agent narrates)
+    """
+    # Normalise: response may be a dict or a Pydantic object
+    if hasattr(response, "model_dump"):
+        resp_dict: dict = response.model_dump()
+    elif isinstance(response, dict):
+        resp_dict = response
+    else:
+        resp_dict = {"status": "unknown", "data": {}, "message": str(response)}
+
+    status: str  = resp_dict.get("status", "error")
+    data:   dict = resp_dict.get("data", {}) or {}
+    message: str = resp_dict.get("message", "")
+
+    if status != "success":
+        await websocket.send_json(tool_error_event(tool_name=tool_name, error=message))
+        log_fn("warning", f"tool {tool_name!r} returned non-success", "TOOL_ERROR")
+        return
+
+    try:
+        if tool_name == "recommend_products":
+            products = data.get("products", [])
+            await websocket.send_json(products_recommended_event(products=products, message=message))
+            log_fn("info", f"PRODUCTS_RECOMMENDED ({len(products)} items)", "PRODUCTS_RECOMMENDED")
+
+        elif tool_name == "manage_cart":
+            await websocket.send_json(
+                cart_updated_event(
+                    items=data.get("items", []),
+                    cart_total=data.get("cart_total", 0.0),
+                    message=message,
+                )
+            )
+            log_fn("info", "CART_UPDATED", "CART_UPDATED")
+
+        elif tool_name == "generate_checkout_link":
+            await websocket.send_json(
+                checkout_link_event(
+                    checkout_url=data.get("checkout_url", ""),
+                    payment_reference=data.get("payment_reference", ""),
+                    message=message,
+                )
+            )
+            log_fn("info", "CHECKOUT_LINK sent", "CHECKOUT_LINK")
+
+        elif tool_name == "update_location":
+            state_val = data.get("state", "")
+            await websocket.send_json(location_confirmed_event(state=state_val, message=message))
+            log_fn("info", f"LOCATION_CONFIRMED: {state_val!r}", "LOCATION_CONFIRMED")
+
+        elif tool_name == "search_disease_matches":
+            # Agent narrates results; no separate UI event
+            matches = data.get("matches", [])
+            log_fn("info", f"disease search returned {len(matches)} matches", "DISEASE_SEARCH")
+
+        else:
+            log_fn("warning", f"unrecognised tool: {tool_name!r}", "UNKNOWN_TOOL")
+
+    except Exception as exc:
+        await websocket.send_json(tool_error_event(tool_name=tool_name, error=str(exc)))
+        log_fn("error", f"error routing tool response for {tool_name!r}: {exc}", "TOOL_ROUTE_ERR")

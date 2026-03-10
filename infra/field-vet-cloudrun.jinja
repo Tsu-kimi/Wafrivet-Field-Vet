@@ -1,0 +1,135 @@
+{#
+  infra/field-vet-cloudrun.jinja
+  ───────────────────────────────
+  Cloud Deployment Manager Jinja2 template for the fieldvet-backend
+  Cloud Run service.
+
+  All environment-specific values are sourced from field-vet-config.yaml.
+  The GCP project ID is never hardcoded here — it is taken from the
+  deployment-time env['project'] variable that Deployment Manager injects.
+
+  Parameters (passed from config YAML via properties):
+    serviceName          (str)  Cloud Run service name
+    image                (str)  Full Artifact Registry image path including tag
+    region               (str)  GCP region (e.g. us-central1)
+    serviceAccountName   (str)  Full SA email for the Cloud Run identity
+    timeoutSeconds       (int)  Max WebSocket session duration (max 3600)
+    minInstances         (int)  Minimum warm instances (1 prevents cold-start drops)
+    concurrency          (int)  Max concurrent requests per instance
+    secrets              (list) List of {envName, secretName} objects
+    startupInitialDelay  (int)  Seconds before first startup probe attempt
+    startupFailureLimit  (int)  Consecutive failures before container is killed
+
+  Usage:
+    gcloud deployment-manager deployments create fieldvet-prod \
+      --config infra/field-vet-config.yaml
+#}
+
+resources:
+- name: {{ properties['serviceName'] }}
+  type: gcp-types/run-v1:namespaces.services
+  properties:
+    # Cloud Run v1 API — KNative serving resource
+    # Target namespace is the GCP project ID (Deployment Manager convention)
+    parent: namespaces/{{ env['project'] }}
+
+    metadata:
+      name: {{ properties['serviceName'] }}
+      namespace: {{ env['project'] }}
+      annotations:
+        # Accept traffic from the public internet (required for --allow-unauthenticated)
+        run.googleapis.com/ingress: all
+
+    spec:
+      template:
+        metadata:
+          annotations:
+            # Keep at least one instance warm at all times.
+            # Scale-to-zero would drop every active WebSocket connection.
+            autoscaling.knative.dev/minScale: "{{ properties.get('minInstances', 1) }}"
+
+            # Session affinity: route reconnecting clients to the same instance
+            # when possible, reducing ADK session-state recreation overhead.
+            # Supabase session_handles provides the correct fallback when
+            # affinity is broken (instance scaled out or instance replaced).
+            run.googleapis.com/sessionAffinity: "true"
+
+            # Startup probe — allows slow ADK + Supabase client initialisation
+            run.googleapis.com/startup-cpu-boost: "true"
+
+        spec:
+          # Cloud Run service identity — must have roles/secretmanager.secretAccessor
+          serviceAccountName: {{ properties['serviceAccountName'] }}
+
+          # Maximum duration a single WebSocket connection can stay open.
+          # Cloud Run treats WebSocket frames as one long HTTP request.
+          # 3600 s = 60 minutes (the Cloud Run maximum).
+          timeoutSeconds: {{ properties.get('timeoutSeconds', 3600) }}
+
+          # Number of concurrent in-flight requests (WebSocket connections)
+          # the container will handle before Cloud Run spins a new instance.
+          containerConcurrency: {{ properties.get('concurrency', 1000) }}
+
+          containers:
+          - image: {{ properties['image'] }}
+
+            ports:
+            # http1 (not h2c) forces HTTP/1.1 end-to-end, which is required for
+            # the WebSocket Upgrade handshake.  HTTP/2 end-to-end is incompatible
+            # with WebSockets and must be disabled (--no-http2 in gcloud CLI).
+            - name: http1
+              containerPort: 8080
+
+            env:
+            # Non-secret runtime config values
+            - name: GOOGLE_CLOUD_LOCATION
+              value: "us-central1"
+            - name: GOOGLE_GENAI_USE_VERTEXAI
+              value: "FALSE"
+            - name: WAFRIVET_LIVE_MODEL
+              value: "gemini-2.0-flash-live-001"
+
+            # Secret references — each value is fetched from Secret Manager
+            # at container startup.  The Cloud Run SA needs secretAccessor
+            # on each secret individually (least-privilege).
+            {% for secret in properties.get('secrets', []) %}
+            - name: {{ secret['envName'] }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ secret['secretName'] }}
+                  key: latest
+            {% endfor %}
+
+            resources:
+              limits:
+                cpu: "2"
+                memory: "2Gi"
+
+            # Startup probe: hit /health until the ADK runner is ready.
+            # Initial delay accounts for ADK + Supabase client warm-up on
+            # a cold-start instance.  Failure threshold * period gives
+            # {{ properties.get('startupInitialDelay', 10) + properties.get('startupFailureLimit', 5) * 10 }} s
+            # total budget before Cloud Run kills a hung container.
+            startupProbe:
+              httpGet:
+                path: /health
+                port: 8080
+              initialDelaySeconds: {{ properties.get('startupInitialDelay', 10) }}
+              periodSeconds: 10
+              timeoutSeconds: 5
+              failureThreshold: {{ properties.get('startupFailureLimit', 5) }}
+
+            # Liveness probe: detect hung or deadlocked sessions and restart
+            # the container without Cloud Run treating it as a bad deployment.
+            livenessProbe:
+              httpGet:
+                path: /health
+                port: 8080
+              periodSeconds: 30
+              timeoutSeconds: 5
+              failureThreshold: 3
+
+      # Route 100 % of traffic to the latest revision on every deploy.
+      traffic:
+      - percent: 100
+        latestRevision: true

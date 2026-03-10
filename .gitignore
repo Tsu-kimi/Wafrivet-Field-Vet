@@ -1,0 +1,65 @@
+# Python virtual environments
+.venv/
+venv/
+ENV/
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+dist/
+build/
+*.egg-info/
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# VS Code settings
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables
+.env
+.env.*
+
+# Logs
+*.log
+
+# Test outputs
+htmlcov/
+.coverage
+.tox/
+.pytest_cache_local/
+
+# Ignore local scripts
+scripts/*.pyc
+
+# Ignore database files
+*.sqlite3
+*.db
+
+# Ignore backup files
+*~
+*.bak
+
+# Deployment secrets — contain real GCP project IDs, service accounts, API keys
+deploy/setup_secrets.sh
+deploy/deploy.sh
+
+# GCP service account key files (never commit these)
+*service-account*.json
+gcp-*.json
+
+# Pytest cache directory
+.pytest_cache/
+
+# Internal planning & strategy docs (hackathon-private)
+Plan.md
+FEATURES.md
+MVP_TIMELINE.md

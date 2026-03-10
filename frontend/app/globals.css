@@ -1,0 +1,126 @@
+/* ── Reset & base ──────────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  /* Palette */
+  --color-bg:           #0a0e14;
+  --color-surface:      #141a24;
+  --color-surface-2:    #1c2535;
+  --color-primary:      #2ea043;
+  --color-primary-dark: #238636;
+  --color-accent:       #58a6ff;
+  --color-text:         #e6edf3;
+  --color-text-muted:   #8b949e;
+  --color-border:       #30363d;
+  --color-error:        #f85149;
+  --color-warning:      #d29922;
+  --color-success:      #3fb950;
+
+  /* Spacing */
+  --spacing-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --spacing-safe-top:    env(safe-area-inset-top, 0px);
+}
+
+html,
+body {
+  height: 100%;
+  /* Prevent elastic scroll bounce on iOS; keep fixed camera view */
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  /* Prevent text selection on long-press (improves UX on Android) */
+  user-select: none;
+}
+
+/* Allow text selection inside transcript / product description areas */
+p, span.selectable {
+  user-select: text;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+/* Full-height app shell */
+#__next {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Keyframe animations ────────────────────────────────────────────────────── */
+
+@keyframes mic-pulse {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(46, 160, 67, 0.7);
+  }
+  50% {
+    transform: scale(1.12);
+    box-shadow: 0 0 0 10px rgba(46, 160, 67, 0);
+  }
+}
+
+@keyframes frame-flash {
+  0%   { opacity: 1; }
+  6%   { opacity: 0.15; }
+  18%  { opacity: 1; }
+  100% { opacity: 1; }
+}
+
+@keyframes cart-pulse {
+  0%   { transform: scale(1); }
+  25%  { transform: scale(1.38); }
+  55%  { transform: scale(0.9); }
+  75%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+@keyframes slide-up {
+  from { transform: translateY(110%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+@keyframes interrupt-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(248, 81, 73, 0.55); }
+  50%       { box-shadow: 0 0 0 24px rgba(248, 81, 73, 0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Hide scrollbar for product row */
+.hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Multi-line text clamp helper */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

@@ -1,0 +1,7 @@
+# Wafrivet Field Vet — Scripts dependencies
+# Install with: pip install -r scripts/requirements.txt
+# These are needed only for the offline data pipeline (seed_embeddings.py).
+
+supabase>=2.9.0,<3.0.0
+google-cloud-aiplatform>=1.75.0,<2.0.0
+python-dotenv>=1.0.0,<2.0.0
