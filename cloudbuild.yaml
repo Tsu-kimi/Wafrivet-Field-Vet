@@ -20,6 +20,7 @@ substitutions:
   _SERVICE_NAME: fieldvet-backend
   _REGION: us-central1
   _REPO: us-central1-docker.pkg.dev/wafrivet-agent/fieldvet-images
+  _SHORT_SHA: latest   # overridden at submit time with the git commit SHA
 
 timeout: 1200s          # 20-minute total budget — generous for multi-arch build + deploy
 
@@ -43,7 +44,7 @@ steps:
       - --platform
       - linux/amd64
       - --tag
-      - ${_REPO}/backend:$SHORT_SHA
+      - ${_REPO}/backend:${_SHORT_SHA}
       - --tag
       - ${_REPO}/backend:latest
       - --file
@@ -82,7 +83,7 @@ steps:
       - run
       - deploy
       - ${_SERVICE_NAME}
-      - --image=${_REPO}/backend:$SHORT_SHA
+      - --image=${_REPO}/backend:${_SHORT_SHA}
       - --region=${_REGION}
       - --project=$PROJECT_ID
 

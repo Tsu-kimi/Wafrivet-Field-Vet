@@ -72,5 +72,5 @@ jobs:
           gcloud builds submit \
             --config cloudbuild.yaml \
             --project ${{ env.PROJECT_ID }} \
-            --substitutions _SERVICE_NAME=fieldvet-backend,_REGION=${{ env.REGION }} \
+            --substitutions _SERVICE_NAME=fieldvet-backend,_REGION=${{ env.REGION }},_SHORT_SHA=${GITHUB_SHA::7} \
             .
