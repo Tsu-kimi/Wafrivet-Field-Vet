@@ -107,6 +107,7 @@ steps:
       # a project identifier tied to billing credentials.  GOOGLE_CLOUD_LOCATION
       # and the model name are non-sensitive config values set as plain env vars.
       - --set-env-vars=GOOGLE_CLOUD_LOCATION=us-central1,GOOGLE_GENAI_USE_VERTEXAI=FALSE,WAFRIVET_LIVE_MODEL=gemini-2.0-flash-live-001
+      - --remove-secrets=GOOGLE_CLOUD_LOCATION
 
       # Secret Manager bindings ─────────────────────────────────────────────
       # Format: ENV_VAR_NAME=SECRET_MANAGER_SECRET_NAME:VERSION
