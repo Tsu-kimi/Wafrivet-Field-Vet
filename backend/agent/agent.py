@@ -13,7 +13,7 @@ Phase 2 uses it directly via the InMemorySessionService + Runner in main.py.
 
 Model:
     gemini-2.0-flash — production Gemini 2.0 Flash for text-based agent turns.
-    Phase 3 overrides this with gemini-2.0-flash-live-001 for the Live API.
+    Phase 3 overrides this with gemini-live-2.5-flash-native-audio for the Live API.
 """
 
 from __future__ import annotations

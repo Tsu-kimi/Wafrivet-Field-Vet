@@ -26,7 +26,7 @@ Session lifecycle:
 Startup / lifespan:
     Runner and InMemorySessionService are created once per process in the
     FastAPI lifespan context manager (not per request).  The live model
-    gemini-2.0-flash-live-001 is used instead of the Phase 2 text model.
+    gemini-live-2.5-flash-native-audio is used instead of the Phase 2 text model.
 """
 from __future__ import annotations
 
@@ -97,7 +97,7 @@ def _is_safe_id(value: str) -> bool:
 # Phase 3 uses the Gemini 2.0 Flash Live model for native audio streaming.
 # The root_agent is defined with gemini-2.0-flash (Phase 2 text model);
 # we create a live_agent that clones its config with the live-model override.
-_LIVE_MODEL = os.environ.get("WAFRIVET_LIVE_MODEL", "gemini-2.0-flash-live-001")
+_LIVE_MODEL = os.environ.get("WAFRIVET_LIVE_MODEL", "gemini-live-2.5-flash-native-audio")
 
 _APP_NAME = "wafrivet"
 

@@ -33,7 +33,7 @@ docker run --rm \
   wafrivet-backend:local
 
 # Expected startup output (within 5 s):
-#   {"event": "wafrivet_streaming_startup", "live_model": "gemini-2.0-flash-live-001", ...}
+#   {"event": "wafrivet_streaming_startup", "live_model": "gemini-live-2.5-flash-native-audio", ...}
 #   {"event": "runner_ready", "agent": "wafrivet_field_vet", ...}
 #   INFO:     Application startup complete.
 #   INFO:     Uvicorn running on http://0.0.0.0:8080
@@ -44,7 +44,7 @@ curl -s http://localhost:8080/health | python -m json.tool
 # {
 #   "status": "ok",
 #   "checks": { "supabase": "ok", "auth": "ok" },
-#   "model": "gemini-2.0-flash-live-001"
+#   "model": "gemini-live-2.5-flash-native-audio"
 # }
 
 # 4. Connect with wscat to verify WebSocket works locally

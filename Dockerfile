@@ -6,7 +6,7 @@
 #
 # Entry point : uvicorn backend.streaming.server:app
 # Exposed port: $PORT  (Cloud Run injects this at runtime; default 8080)
-# Live model  : gemini-2.0-flash-live-001
+# Live model  : gemini-live-2.5-flash-native-audio
 #               Requires google-genai >= 1.0.0 (declared in requirements.txt)
 #
 # Secrets are NOT embedded here.  All credentials are injected at runtime
@@ -41,9 +41,9 @@ COPY backend/ ./backend/
 ENV PORT=8080
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-# Tell ADK/google-genai to use the API-key path (not Vertex AI) by default.
-# Cloud Run's --set-env-vars or Secret Manager can override this for Vertex.
-ENV GOOGLE_GENAI_USE_VERTEXAI=FALSE
+# Tell ADK/google-genai to use Vertex AI (not the direct Gemini API key path).
+# Vertex AI is required for bidiGenerateContent (Live API) with gemini-live-2.5-flash-native-audio.
+ENV GOOGLE_GENAI_USE_VERTEXAI=TRUE
 
 # ── Drop privileges ────────────────────────────────────────────────────────
 USER appuser
