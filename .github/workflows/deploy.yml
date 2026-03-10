@@ -68,9 +68,14 @@ jobs:
       # create a NEW cloud-run-source-deploy repo and ignores cloudbuild.yaml.
       # ───────────────────────────────────────────────────────────────────
       - name: Deploy to Cloud Run via Cloud Build
+        env:
+          PROJECT_ID: ${{ env.PROJECT_ID }}
+          REGION: ${{ env.REGION }}
         run: |
+          SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-7)
+          echo "SHORT_SHA is: $SHORT_SHA"
           gcloud builds submit \
             --config cloudbuild.yaml \
-            --project ${{ env.PROJECT_ID }} \
-            --substitutions _SERVICE_NAME=fieldvet-backend,_REGION=${{ env.REGION }},_SHORT_SHA=${GITHUB_SHA:0:7} \
+            --project "$PROJECT_ID" \
+            --substitutions "_SERVICE_NAME=fieldvet-backend,_REGION=$REGION,_SHORT_SHA=$SHORT_SHA" \
             .

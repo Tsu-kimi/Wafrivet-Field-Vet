@@ -27,6 +27,7 @@ timeout: 1200s          # 20-minute total budget — generous for multi-arch bui
 options:
   machineType: E2_HIGHCPU_8    # 8 vCPU — accelerates Docker layer builds
   logging: CLOUD_LOGGING_ONLY  # send build logs to Cloud Logging (no GCS bucket needed)
+  substitutionOption: ALLOW_LOOSE  # don't fail on unused substitutions
 
 steps:
   # ─────────────────────────────────────────────────────────────────────────
