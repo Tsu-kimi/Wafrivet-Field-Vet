@@ -52,7 +52,7 @@ _REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__f
 if _REPO_ROOT not in sys.path:
     sys.path.insert(0, _REPO_ROOT)
 
-from backend.agent.agent import root_agent  # noqa: E402
+from backend.agent.agent import root_agent, reflect_and_retry_plugin  # noqa: E402
 from backend.agent.session import INITIAL_STATE  # noqa: E402
 from backend.streaming.bridge import run_bridge  # noqa: E402
 from backend.streaming.session_store import (  # noqa: E402
@@ -113,9 +113,27 @@ def _build_live_agent() -> LlmAgent:
 
 
 def _build_run_config() -> RunConfig:
+    """
+    Build RunConfig for Gemini Live sessions.
+
+    - enable_affective_dialog: model auto-adjusts pace/warmth to the user's
+      emotional register without any application logic.
+    - speech_config / voice_name="Kore": warm, nurturing voice suited to
+      distressed or uncertain users across all three user types.
+    - System instruction is carried by the agent's instruction field
+      (FATIMA_SYSTEM_PROMPT), not re-sent here.
+    """
     return RunConfig(
         streaming_mode=StreamingMode.BIDI,
         response_modalities=[types.Modality.AUDIO],
+        enable_affective_dialog=True,
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                    voice_name="Kore"
+                )
+            )
+        ),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
     )
@@ -146,6 +164,7 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator:
         agent=live_agent,
         app_name=_APP_NAME,
         session_service=_session_service,
+        plugins=[reflect_and_retry_plugin],
     )
     _run_config = _build_run_config()
 
@@ -281,6 +300,18 @@ async def websocket_endpoint(
     else:
         log.info("session_resumed", user_id=user_id, session_id=session_id)
 
+    # Structured session_open log — visible in Cloud Run log stream during demo.
+    import json as _json, logging as _logging
+    _logging.getLogger("wafrivet.streaming.server").info(
+        _json.dumps({
+            "event": "session_open",
+            "session_id": session_id,
+            "user_id": user_id,
+            "user_type_detected": None,
+            "model": _LIVE_MODEL,
+        })
+    )
+
     # Persist the mapping so the client can reconnect
     upsert_session_handle(user_id=user_id, session_id=session_id)
 
@@ -319,4 +350,12 @@ async def websocket_endpoint(
                 error=str(exc),
             )
         finally:
+            import json as _json, logging as _logging
+            _logging.getLogger("wafrivet.streaming.server").info(
+                _json.dumps({
+                    "event": "session_close",
+                    "session_id": session_id,
+                    "user_id": user_id,
+                })
+            )
             log.info("ws_closed", user_id=user_id, session_id=session_id)

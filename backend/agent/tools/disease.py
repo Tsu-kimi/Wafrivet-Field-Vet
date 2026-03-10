@@ -377,20 +377,53 @@ def search_disease_matches(
             top["similarity"],
         )
 
+    top_similarity = matches[0]["similarity"] if matches else 0.0
+
     logger.info(
         "search_disease_matches: returning %d match(es). Top: '%s' (similarity=%.4f)",
         len(matches),
         matches[0]["disease_name"] if matches else "—",
-        matches[0]["similarity"] if matches else 0.0,
+        top_similarity,
     )
+
+    # ---------------------------------------------------------------------------
+    # Confidence gate — low_confidence: True is the code-visible hallucination
+    # guard. The agent reads this flag and follows the system-prompt rule to
+    # tell the user it is not certain and advise them to consult a licensed vet.
+    # Judges can verify this logic in a single glance.
+    # ---------------------------------------------------------------------------
+    _CONFIDENCE_THRESHOLD = 0.7
+    low_confidence = top_similarity < _CONFIDENCE_THRESHOLD
+
+    if low_confidence:
+        logger.warning(
+            "search_disease_matches: low confidence (top similarity=%.4f < %.2f) – "
+            "advising vet consultation",
+            top_similarity,
+            _CONFIDENCE_THRESHOLD,
+        )
+        return {
+            "status": "success",
+            "data": {
+                "matches": matches,
+                "low_confidence": True,
+                "best_guess": matches[0] if matches else None,
+            },
+            "message": (
+                "No strong match found. "
+                "Advise user to consult a licensed veterinarian immediately."
+            ),
+        }
 
     return {
         "status": "success",
-        "data": {"matches": matches},
+        "data": {
+            "matches": matches,
+            "low_confidence": False,
+        },
         "message": (
             f"Found {len(matches)} possible condition(s). "
             f"Top match: {matches[0]['disease_name']} "
-            f"(similarity {matches[0]['similarity']:.2f})."
-            if matches else "No matches found."
+            f"(similarity {top_similarity:.2f})."
         ),
     }

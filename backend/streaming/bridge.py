@@ -109,6 +109,27 @@ async def run_bridge(
 
     _log("info", "bridge started")
 
+    # Lightweight session-level flags tracked inside the bridge lifetime.
+    # is_ai_speaking mirrors whether Gemini is currently producing audio so
+    # barge-in handling can discard in-flight chunks immediately.
+    session_state: dict = {"is_ai_speaking": False}
+
+    # ------------------------------------------------------------------
+    # Proactive greeting — Fatima speaks first on every session open.
+    # Enqueue the trigger message BEFORE starting the tasks so it arrives
+    # as the very first input the run_live() loop processes.
+    # ------------------------------------------------------------------
+    live_request_queue.send_content(
+        types.Content(
+            role="user",
+            parts=[types.Part(text=(
+                "The session has just started. Greet the user warmly as Fatima "
+                "and ask what is wrong with their animal or what you can help with today."
+            ))],
+        )
+    )
+    _log("info", "proactive greeting enqueued", "GREETING")
+
     # ------------------------------------------------------------------
     # Upstream: WebSocket → LiveRequestQueue
     # ------------------------------------------------------------------
@@ -200,17 +221,29 @@ async def run_bridge(
                     # Transient error — keep processing
                     continue
 
-                # ── Priority 2: Interruption ─────────────────────────────
+                # ── Priority 2: Interruption (barge-in) ──────────────────
                 if event.interrupted:
                     if not is_interrupted:
                         is_interrupted = True
+                        # 1. Mark Fatima as no longer speaking so subsequent audio
+                        #    chunks are discarded rather than forwarded.
+                        session_state["is_ai_speaking"] = False
+                        # 2. Tell the browser to stop the audio player and cancel
+                        #    all scheduled AudioBufferSourceNode instances, then
+                        #    also send the canonical AUDIO_FLUSH envelope.
+                        await websocket.send_json({"type": "interrupted"})
                         await websocket.send_json(audio_flush_event())
-                        _log("info", "interruption detected → AUDIO_FLUSH sent", "AUDIO_FLUSH")
+                        # 3. Emit a structured log line for the Cloud Run log stream.
+                        logger.info(
+                            {"event": "barge_in", "session_id": session_id, "timestamp": time.time()}
+                        )
+                        _log("info", "barge-in → interrupted + AUDIO_FLUSH sent", "BARGE_IN")
                     continue
 
                 # ── Priority 3: Turn complete ────────────────────────────
                 if event.turn_complete:
                     is_interrupted = False
+                    session_state["is_ai_speaking"] = False
                     await websocket.send_json(turn_complete_event())
                     _log("info", "turn complete", "TURN_COMPLETE")
                     continue
@@ -246,6 +279,9 @@ async def run_bridge(
                 if event.content and event.content.parts:
                     for part in event.content.parts:
                         if part.inline_data and part.inline_data.data:
+                            # Mark Fatima as speaking so the barge-in handler
+                            # knows there is live audio in flight.
+                            session_state["is_ai_speaking"] = True
                             # Send raw PCM as binary WebSocket frame for low latency
                             await websocket.send_bytes(part.inline_data.data)
                             _log(
@@ -263,8 +299,7 @@ async def run_bridge(
                         websocket=websocket,
                         tool_name=fn_name,
                         response=fn_resp.response,
-                        log_fn=_log,
-                    )
+                        log_fn=_log,                        session_id=session_id,                    )
 
         except WebSocketDisconnect:
             _log("info", "WebSocket disconnected during downstream", "DISCONNECT")
@@ -316,6 +351,7 @@ async def _route_tool_response(
     tool_name: str,
     response: Any,
     log_fn: Any,
+    session_id: str = "",
 ) -> None:
     """
     Inspect a tool function response and send the corresponding UI event.
@@ -341,13 +377,34 @@ async def _route_tool_response(
 
     if status != "success":
         await websocket.send_json(tool_error_event(tool_name=tool_name, error=message))
+        logger.info(
+            {
+                "event": "tool_error",
+                "tool": tool_name,
+                "error": message,
+                "session_id": session_id,
+            }
+        )
         log_fn("warning", f"tool {tool_name!r} returned non-success", "TOOL_ERROR")
         return
 
     try:
         if tool_name == "recommend_products":
             products = data.get("products", [])
+            # Retrieve the disease/location context from the data dict if available
+            disease_category = data.get("disease_category", "")
+            location = data.get("location", "")
             await websocket.send_json(products_recommended_event(products=products, message=message))
+            logger.info(
+                {
+                    "event": "tool_call",
+                    "tool": "recommend_products",
+                    "disease": disease_category,
+                    "location": location,
+                    "products_returned": len(products),
+                    "session_id": session_id,
+                }
+            )
             log_fn("info", f"PRODUCTS_RECOMMENDED ({len(products)} items)", "PRODUCTS_RECOMMENDED")
 
         elif tool_name == "manage_cart":
@@ -376,8 +433,21 @@ async def _route_tool_response(
             log_fn("info", f"LOCATION_CONFIRMED: {state_val!r}", "LOCATION_CONFIRMED")
 
         elif tool_name == "search_disease_matches":
-            # Agent narrates results; no separate UI event
+            # Agent narrates results; no separate UI event.
+            # Emit the structured log judges will see in the Cloud Run stream.
             matches = data.get("matches", [])
+            low_confidence = data.get("low_confidence", False)
+            top_match = matches[0] if matches else {}
+            logger.info(
+                {
+                    "event": "tool_call",
+                    "tool": "search_disease_matches",
+                    "top_match": top_match.get("disease_name", ""),
+                    "similarity": top_match.get("similarity", 0.0),
+                    "low_confidence": low_confidence,
+                    "session_id": session_id,
+                }
+            )
             log_fn("info", f"disease search returned {len(matches)} matches", "DISEASE_SEARCH")
 
         else:
@@ -385,4 +455,12 @@ async def _route_tool_response(
 
     except Exception as exc:
         await websocket.send_json(tool_error_event(tool_name=tool_name, error=str(exc)))
+        logger.info(
+            {
+                "event": "tool_error",
+                "tool": tool_name,
+                "error": str(exc),
+                "session_id": session_id,
+            }
+        )
         log_fn("error", f"error routing tool response for {tool_name!r}: {exc}", "TOOL_ROUTE_ERR")

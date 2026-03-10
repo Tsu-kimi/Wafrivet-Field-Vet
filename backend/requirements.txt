@@ -6,15 +6,15 @@ supabase>=2.9.0,<3.0.0
 
 # --- Google Cloud Vertex AI (embeddings + Gemini Live) ----------------------
 google-cloud-aiplatform>=1.75.0,<2.0.0
-google-genai>=1.0.0,<2.0.0
+google-genai>=1.66.0,<2.0.0
 
 # --- Google ADK (Phase 2+) --------------------------------------------------
-google-adk>=0.5.0
+google-adk>=1.26.0
 
 # --- FastAPI WebSocket server (Phase 4+) ------------------------------------
 fastapi>=0.115.0,<1.0.0
 uvicorn[standard]>=0.32.0,<1.0.0
-websockets>=13.0,<15.0
+websockets>=13.0,<16.0
 
 # --- Environment and configuration ------------------------------------------
 python-dotenv>=1.0.0,<2.0.0
