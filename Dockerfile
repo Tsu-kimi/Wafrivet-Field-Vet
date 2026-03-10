@@ -34,7 +34,6 @@ RUN pip install --no-cache-dir --upgrade pip \
 # Only the backend package and the example env template are copied.
 # The real .env file must NEVER be included in the image.
 COPY backend/ ./backend/
-COPY .env.example ./.env.example
 
 # ── Runtime environment ────────────────────────────────────────────────────
 # Cloud Run overrides PORT at container startup time.
