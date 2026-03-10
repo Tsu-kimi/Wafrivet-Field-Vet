@@ -101,7 +101,6 @@ steps:
       - --cpu=1
       - --port=8080
       - --session-affinity
-      - --no-http2
 
       # Non-secret runtime configuration ───────────────────────────────────
       # GOOGLE_CLOUD_PROJECT is kept as a Secret Manager secret because it is
