@@ -14,9 +14,14 @@
  *   Using the exported `viewport` constant avoids deprecated <meta> tags.
  */
 
+import { Inter, Fraunces, JetBrains_Mono } from 'next/font/google';
 import type { Metadata, Viewport } from 'next';
 import { WebSocketProvider } from './components/WebSocketProvider';
 import './globals.css';
+
+const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
+const fraunces = Fraunces({ subsets: ['latin'], variable: '--font-fraunces' });
+const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 
 // ── Document metadata ─────────────────────────────────────────────────────────
 
@@ -56,7 +61,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
+    <html lang="en" className={`${inter.variable} ${fraunces.variable} ${mono.variable}`}>
       <body>
         {/*
           WebSocketProvider is a Client Component. Importing it here is valid

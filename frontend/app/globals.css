@@ -6,16 +6,24 @@
 }
 
 :root {
-  /* Palette */
-  --color-bg:           #0a0e14;
-  --color-surface:      #141a24;
-  --color-surface-2:    #1c2535;
-  --color-primary:      #2ea043;
-  --color-primary-dark: #238636;
-  --color-accent:       #58a6ff;
-  --color-text:         #e6edf3;
-  --color-text-muted:   #8b949e;
-  --color-border:       #30363d;
+  /* Wafrivet Brand Palette */
+  --color-sage:         #6B7D56;
+  --color-sage-dark:    #5A6A48;
+  --color-bone:         #D9E0D0;
+  --color-bone-light:   #E8EDE2;
+  --color-forest:       #3A442E;
+  --color-white:        #FFFFFF;
+
+  /* Semantic Mapping */
+  --color-bg:           var(--color-bone);
+  --color-surface:      var(--color-bone-light);
+  --color-surface-2:    var(--color-white);
+  --color-primary:      var(--color-sage);
+  --color-primary-dark: var(--color-sage-dark);
+  --color-accent:       var(--color-sage);
+  --color-text:         var(--color-forest);
+  --color-text-muted:   rgba(58, 68, 46, 0.7); /* Forest with opacity */
+  --color-border:       var(--color-sage);
   --color-error:        #f85149;
   --color-warning:      #d29922;
   --color-success:      #3fb950;
@@ -33,7 +41,7 @@ body {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   background: var(--color-bg);
   color: var(--color-text);
   line-height: 1.5;

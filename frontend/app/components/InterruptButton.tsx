@@ -17,6 +17,7 @@
  */
 
 import React from 'react';
+import { CloseCircle } from 'iconsax-react';
 
 export interface InterruptButtonProps {
   /** Whether to render the button. Mount/unmount drives the animation. */
@@ -41,8 +42,8 @@ export function InterruptButton({
         width: '90px',
         height: '90px',
         borderRadius: '50%',
-        background: 'rgba(248, 81, 73, 0.92)',
-        border: '3.5px solid rgba(255,255,255,0.92)',
+        background: 'color-mix(in srgb, var(--color-warning) 92%, transparent)',
+        border: '3.5px solid color-mix(in srgb, var(--color-white) 92%, transparent)',
         cursor: 'pointer',
         display: 'flex',
         flexDirection: 'column',
@@ -58,16 +59,16 @@ export function InterruptButton({
       aria-label="Interrupt AI response and stop speaking"
     >
       <span
-        style={{ fontSize: '28px', lineHeight: 1, userSelect: 'none' }}
+        style={{ display: 'flex', alignItems: 'center' }}
         aria-hidden
       >
-        ✋
+        <CloseCircle variant="Bold" color="var(--color-white)" size={32} />
       </span>
       <span
         style={{
           fontSize: '9px',
           fontWeight: 800,
-          color: '#fff',
+          color: 'var(--color-white)',
           textTransform: 'uppercase',
           letterSpacing: '0.06em',
           lineHeight: 1,

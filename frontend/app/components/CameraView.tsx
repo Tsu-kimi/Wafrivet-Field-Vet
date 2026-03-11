@@ -15,6 +15,7 @@
  */
 
 import React, { useRef, useCallback } from 'react';
+import { Microphone2 } from 'iconsax-react';
 import type { ConnectionState } from '@/app/hooks/useWebSocketSession';
 
 export interface CameraViewProps {
@@ -59,7 +60,7 @@ export function CameraView({
         position: 'absolute',
         inset: 0,
         zIndex: 0,
-        background: '#0a0e14',
+        background: 'var(--color-bg)',
         overflow: 'hidden',
       }}
       onClick={handleTap}
@@ -107,7 +108,7 @@ export function CameraView({
             width: '14px',
             height: '14px',
             borderRadius: '50%',
-            background: '#2ea043',
+            background: 'var(--color-primary)',
             animation: 'mic-pulse 1.4s ease-in-out infinite',
             zIndex: 10,
           }}
@@ -137,7 +138,7 @@ export function CameraView({
               width: '8px',
               height: '8px',
               borderRadius: '50%',
-              background: '#58a6ff',
+              background: 'var(--color-accent)',
               display: 'inline-block',
               animation: 'frame-flash 1.5s steps(1, end) infinite',
             }}
@@ -146,7 +147,7 @@ export function CameraView({
             style={{
               fontSize: '10px',
               fontWeight: 700,
-              color: '#e6edf3',
+              color: 'var(--color-text)',
               lineHeight: 1,
               letterSpacing: '0.06em',
             }}
@@ -171,7 +172,7 @@ export function CameraView({
             padding: '5px 14px',
             fontSize: '11px',
             fontWeight: 600,
-            color: connectionState === 'error' ? '#f85149' : '#d29922',
+            color: connectionState === 'error' ? 'var(--color-error)' : 'var(--color-warning)',
             zIndex: 10,
             whiteSpace: 'nowrap',
             letterSpacing: '0.04em',
@@ -200,26 +201,26 @@ export function CameraView({
             zIndex: 5,
           }}
         >
-          <div
-            style={{
-              width: '88px',
-              height: '88px',
-              borderRadius: '50%',
-              background: 'rgba(46, 160, 67, 0.18)',
-              border: '2.5px solid rgba(46, 160, 67, 0.75)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '36px',
-              animation: 'mic-pulse 2s ease-in-out infinite',
-            }}
-          >
-            🎙
-          </div>
+            <div
+              style={{
+                width: '88px',
+                height: '88px',
+                borderRadius: '50%',
+                background: 'color-mix(in srgb, var(--color-primary) 18%, transparent)',
+                border: '2.5px solid color-mix(in srgb, var(--color-primary) 75%, transparent)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                animation: 'mic-pulse 2s ease-in-out infinite',
+              }}
+            >
+              <Microphone2 variant="Bold" color="var(--color-primary)" size={42} />
+            </div>
           <p
             style={{
-              color: '#e6edf3',
-              fontSize: '16px',
+              color: 'var(--color-text)',
+              fontFamily: 'var(--font-fraunces)',
+              fontSize: '20px',
               fontWeight: 700,
               textAlign: 'center',
               padding: '0 40px',
@@ -231,7 +232,7 @@ export function CameraView({
           </p>
           <p
             style={{
-              color: 'rgba(230,237,243,0.7)',
+              color: 'var(--color-text-muted)',
               fontSize: '13px',
               textAlign: 'center',
               padding: '0 48px',
@@ -252,12 +253,12 @@ export function CameraView({
             bottom: '140px',
             left: '16px',
             right: '16px',
-            background: 'rgba(248, 81, 73, 0.92)',
+            background: 'color-mix(in srgb, var(--color-error) 92%, transparent)',
             borderRadius: '14px',
             padding: '14px 18px',
             fontSize: '14px',
             fontWeight: 600,
-            color: '#fff',
+            color: 'var(--color-white)',
             textAlign: 'center',
             zIndex: 10,
             lineHeight: 1.5,

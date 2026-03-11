@@ -52,8 +52,8 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
         flex: '0 0 160px',
         borderRadius: '16px',
         overflow: 'hidden',
-        background: isActive ? '#142014' : '#141a24',
-        border: `2px solid ${isActive ? '#2ea043' : '#30363d'}`,
+        background: isActive ? 'var(--color-surface)' : 'var(--color-bg)',
+        border: `2px solid ${isActive ? 'var(--color-primary)' : 'var(--color-border)'}`,
         display: 'flex',
         flexDirection: 'column',
         cursor: 'pointer',
@@ -62,7 +62,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
         WebkitTapHighlightColor: 'transparent',
         touchAction: 'manipulation',
         boxShadow: isActive
-          ? '0 0 0 3px rgba(46,160,67,0.25), 0 4px 16px rgba(0,0,0,0.4)'
+          ? '0 0 0 3px color-mix(in srgb, var(--color-primary) 25%, transparent), 0 4px 16px rgba(0,0,0,0.4)'
           : '0 2px 8px rgba(0,0,0,0.3)',
       }}
     >
@@ -72,7 +72,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
           position: 'relative',
           width: '100%',
           aspectRatio: '4/3',
-          background: '#1c2535',
+          background: 'var(--color-surface-2)',
           overflow: 'hidden',
         }}
       >
@@ -95,7 +95,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '32px',
-              color: '#30363d',
+              color: 'var(--color-text-muted)',
             }}
             aria-hidden
           >
@@ -119,7 +119,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
           style={{
             fontSize: '12px',
             fontWeight: 700,
-            color: '#e6edf3',
+            color: 'var(--color-text)',
             lineHeight: 1.35,
             margin: 0,
           }}
@@ -131,7 +131,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
           style={{
             fontSize: '14px',
             fontWeight: 800,
-            color: '#3fb950',
+            color: 'var(--color-primary)',
             margin: 0,
           }}
         >
@@ -145,10 +145,10 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
           }}
           style={{
             background: isActive
-              ? 'linear-gradient(135deg, #2ea043, #238636)'
-              : 'rgba(46, 160, 67, 0.12)',
-            color: isActive ? '#fff' : '#3fb950',
-            border: `1.5px solid ${isActive ? 'transparent' : 'rgba(46,160,67,0.35)'}`,
+              ? 'var(--color-primary)'
+              : 'color-mix(in srgb, var(--color-primary) 12%, transparent)',
+            color: isActive ? 'var(--color-white)' : 'var(--color-primary)',
+            border: `1.5px solid ${isActive ? 'transparent' : 'color-mix(in srgb, var(--color-primary) 35%, transparent)'}`,
             borderRadius: '10px',
             padding: '8px 6px',
             fontSize: '12px',
@@ -186,13 +186,13 @@ export function ProductCardRow({
     >
       <p
         style={{
-          fontSize: '11px',
+          fontSize: '12px',
           fontWeight: 700,
-          color: '#d4a017',
+          fontFamily: 'var(--font-fraunces)',
+          color: 'var(--color-text)',
           textTransform: 'uppercase',
           letterSpacing: '0.09em',
           padding: '0 16px 8px',
-          textShadow: '0 1px 4px rgba(0,0,0,0.9)',
           margin: 0,
         }}
       >

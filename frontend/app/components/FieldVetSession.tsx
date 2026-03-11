@@ -171,7 +171,7 @@ export function FieldVetSession() {
         width: '100%',
         height: '100svh',
         overflow: 'hidden',
-        background: '#0a0e14',
+        background: 'var(--color-bg)',
         touchAction: 'none', // Prevent pull-to-refresh / page scroll on Android.
       }}
       /* Expose safe area to CSS var consumers */
@@ -217,12 +217,12 @@ export function FieldVetSession() {
             top: 'calc(8px + var(--spacing-safe-top))',
             left: '16px',
             right: '16px',
-            background: 'rgba(248, 81, 73, 0.9)',
+            background: 'color-mix(in srgb, var(--color-error) 90%, transparent)',
             borderRadius: '10px',
             padding: '8px 14px',
             fontSize: '12px',
             fontWeight: 600,
-            color: '#fff',
+            color: 'var(--color-white)',
             zIndex: 65,
             textAlign: 'center',
             backdropFilter: 'blur(6px)',
@@ -331,12 +331,12 @@ export function FieldVetSession() {
             autoCorrect="on"
             style={{
               flex: 1,
-              background: 'rgba(28, 37, 53, 0.85)',
-              border: '1.5px solid rgba(48, 54, 61, 0.8)',
+              background: 'var(--color-surface)',
+              border: '1.5px solid var(--color-border)',
               borderRadius: '12px',
               padding: '0 14px',
               fontSize: '15px',
-              color: '#e6edf3',
+              color: 'var(--color-text)',
               minHeight: '48px',
               backdropFilter: 'blur(8px)',
               outline: 'none',
@@ -347,9 +347,9 @@ export function FieldVetSession() {
             disabled={!textDraft.trim()}
             style={{
               background: textDraft.trim()
-                ? 'rgba(46,160,67,0.9)'
-                : 'rgba(46,160,67,0.3)',
-              color: '#fff',
+                ? 'var(--color-primary)'
+                : 'color-mix(in srgb, var(--color-primary) 30%, transparent)',
+              color: 'var(--color-white)',
               border: 'none',
               borderRadius: '12px',
               padding: '0 16px',

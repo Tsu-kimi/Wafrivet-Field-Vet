@@ -17,6 +17,8 @@
  */
 
 import React, { useState, useId } from 'react';
+import { Location } from 'iconsax-react';
+
 
 export interface LocationBannerProps {
   /** Nominatim-resolved state string. Null while GPS is loading or failed. */
@@ -53,8 +55,8 @@ export function LocationBanner({
           position: 'absolute',
           bottom: 'calc(14px + var(--spacing-safe-bottom))',
           left: '16px',
-          background: 'rgba(46, 160, 67, 0.22)',
-          border: '1px solid rgba(63, 185, 80, 0.5)',
+          background: 'color-mix(in srgb, var(--color-primary) 22%, transparent)',
+          border: '1px solid var(--color-primary)',
           borderRadius: '24px',
           padding: '7px 14px',
           display: 'flex',
@@ -65,13 +67,15 @@ export function LocationBanner({
           backdropFilter: 'blur(8px)',
         }}
       >
-        <span style={{ fontSize: '14px' }}>📍</span>
+        <span style={{ display: 'flex', alignItems: 'center' }}>
+          <Location variant="Bold" color="var(--color-primary)" size={16} />
+        </span>
         <span
           style={{
             fontSize: '13px',
             fontWeight: 700,
-            color: '#3fb950',
-            textShadow: '0 1px 3px rgba(0,0,0,0.6)',
+            color: 'var(--color-primary)',
+            textShadow: '0 1px 3px color-mix(in srgb, var(--color-bg) 60%, transparent)',
           }}
         >
           {confirmedLocation}
@@ -92,16 +96,16 @@ export function LocationBanner({
         bottom: 0,
         left: 0,
         right: 0,
-        background: 'rgba(16, 22, 32, 0.97)',
+        background: 'color-mix(in srgb, var(--color-surface-2) 97%, transparent)',
         borderTopLeftRadius: '22px',
         borderTopRightRadius: '22px',
         padding: '22px 18px',
         paddingBottom: 'calc(22px + var(--spacing-safe-bottom))',
         zIndex: 55,
         animation: 'slide-up 0.32s cubic-bezier(0.22, 1, 0.36, 1)',
-        borderTop: '1px solid rgba(255,255,255,0.09)',
+        borderTop: '1px solid color-mix(in srgb, var(--color-primary) 20%, transparent)',
         backdropFilter: 'blur(12px)',
-        boxShadow: '0 -4px 40px rgba(0,0,0,0.5)',
+        boxShadow: '0 -4px 40px rgba(0,0,0,0.1)',
       }}
     >
       {/* ── Loading state ────────────────────────────────────────────────── */}
@@ -111,12 +115,14 @@ export function LocationBanner({
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
-            color: '#8b949e',
+            color: 'var(--color-text-muted)',
             minHeight: '48px',
           }}
         >
-          <span style={{ fontSize: '20px' }}>📍</span>
-          <span style={{ fontSize: '15px', fontWeight: 500 }}>
+          <span style={{ display: 'flex', alignItems: 'center' }}>
+            <Location variant="Linear" color="var(--color-text-muted)" size={24} />
+          </span>
+          <span style={{ fontSize: '15px', fontWeight: 500, fontFamily: 'var(--font-fraunces)' }}>
             Detecting your location…
           </span>
         </div>
@@ -127,9 +133,10 @@ export function LocationBanner({
         <div>
           <p
             style={{
-              fontSize: '15px',
+              fontSize: '18px',
+              fontFamily: 'var(--font-fraunces)',
               fontWeight: 700,
-              color: '#e6edf3',
+              color: 'var(--color-text)',
               marginBottom: '6px',
             }}
           >
@@ -140,7 +147,7 @@ export function LocationBanner({
           <p
             style={{
               fontSize: '13px',
-              color: '#8b949e',
+              color: 'var(--color-text-muted)',
               marginBottom: '14px',
               lineHeight: 1.5,
             }}
@@ -171,12 +178,12 @@ export function LocationBanner({
               autoCorrect="off"
               style={{
                 flex: 1,
-                background: '#1c2535',
-                border: '1.5px solid #30363d',
+                background: 'var(--color-bg)',
+                border: '1.5px solid var(--color-border)',
                 borderRadius: '12px',
                 padding: '0 14px',
                 fontSize: '16px',
-                color: '#e6edf3',
+                color: 'var(--color-text)',
                 minHeight: '52px',
                 outline: 'none',
               }}
@@ -185,8 +192,8 @@ export function LocationBanner({
               type="submit"
               disabled={!manualState.trim()}
               style={{
-                background: manualState.trim() ? '#2ea043' : 'rgba(46,160,67,0.3)',
-                color: '#fff',
+                background: manualState.trim() ? 'var(--color-primary)' : 'color-mix(in srgb, var(--color-primary) 30%, transparent)',
+                color: 'var(--color-white)',
                 border: 'none',
                 borderRadius: '12px',
                 padding: '0 20px',
@@ -211,7 +218,7 @@ export function LocationBanner({
             style={{
               fontSize: '12px',
               fontWeight: 600,
-              color: '#8b949e',
+              color: 'var(--color-text-muted)',
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
               marginBottom: '6px',
@@ -221,9 +228,10 @@ export function LocationBanner({
           </p>
           <p
             style={{
-              fontSize: '22px',
+              fontSize: '26px',
+              fontFamily: 'var(--font-fraunces)',
               fontWeight: 800,
-              color: '#e6edf3',
+              color: 'var(--color-text)',
               marginBottom: '10px',
               lineHeight: 1.2,
             }}
@@ -233,7 +241,7 @@ export function LocationBanner({
           <p
             style={{
               fontSize: '13px',
-              color: '#8b949e',
+              color: 'var(--color-text-muted)',
               marginBottom: '18px',
               lineHeight: 1.55,
             }}
@@ -245,8 +253,8 @@ export function LocationBanner({
               onClick={() => onConfirm(detectedState)}
               style={{
                 flex: 1,
-                background: 'linear-gradient(135deg, #2ea043, #238636)',
-                color: '#fff',
+                background: 'var(--color-primary)',
+                color: 'var(--color-white)',
                 border: 'none',
                 borderRadius: '14px',
                 padding: '0 14px',
@@ -254,7 +262,7 @@ export function LocationBanner({
                 fontWeight: 700,
                 cursor: 'pointer',
                 minHeight: '56px',
-                boxShadow: '0 4px 16px rgba(46,160,67,0.35)',
+                boxShadow: '0 4px 16px color-mix(in srgb, var(--color-primary) 35%, transparent)',
                 touchAction: 'manipulation',
               }}
               aria-label={`Confirm location as ${detectedState}`}
@@ -269,8 +277,8 @@ export function LocationBanner({
               style={{
                 flex: 1,
                 background: 'transparent',
-                color: '#e6edf3',
-                border: '1.5px solid #30363d',
+                color: 'var(--color-text)',
+                border: '1.5px solid var(--color-border)',
                 borderRadius: '14px',
                 padding: '0 14px',
                 fontSize: '16px',

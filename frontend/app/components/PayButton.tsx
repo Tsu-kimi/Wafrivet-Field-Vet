@@ -22,6 +22,8 @@
  */
 
 import React, { useState } from 'react';
+import { Wallet } from 'iconsax-react';
+
 
 export interface PayButtonProps {
   /** Cart total in NGN — converted to kobo (×100) when calling Paystack. */
@@ -82,9 +84,9 @@ export function PayButton({ cartTotal }: PayButtonProps) {
         style={{
           width: '100%',
           background: isLoading
-            ? 'rgba(232,101,26,0.5)'
-            : 'linear-gradient(135deg, #e8651a 0%, #d4a017 100%)',
-          color: '#fff',
+            ? 'color-mix(in srgb, var(--color-primary) 50%, transparent)'
+            : 'var(--color-primary)',
+          color: 'var(--color-white)',
           border: 'none',
           borderRadius: '18px',
           padding: '0 24px',
@@ -98,7 +100,7 @@ export function PayButton({ cartTotal }: PayButtonProps) {
           gap: '10px',
           boxShadow: isLoading
             ? 'none'
-            : '0 6px 28px rgba(232, 101, 26, 0.5), 0 2px 8px rgba(0,0,0,0.3)',
+            : '0 6px 28px color-mix(in srgb, var(--color-primary) 50%, transparent), 0 2px 8px rgba(0,0,0,0.3)',
           letterSpacing: '0.01em',
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation',
@@ -108,8 +110,8 @@ export function PayButton({ cartTotal }: PayButtonProps) {
         aria-label={`Pay ₦${cartTotal.toLocaleString('en-NG')} now with Paystack`}
         aria-busy={isLoading}
       >
-        <span aria-hidden style={{ fontSize: '20px' }}>
-          {isLoading ? '⏳' : '💳'}
+        <span aria-hidden style={{ display: 'flex', alignItems: 'center' }}>
+          {isLoading ? '⏳' : <Wallet variant="Bold" size={24} color="var(--color-white)" />}
         </span>
         <span>
           {isLoading
@@ -127,7 +129,7 @@ export function PayButton({ cartTotal }: PayButtonProps) {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(10, 14, 20, 0.94)',
+            background: 'color-mix(in srgb, var(--color-bg) 94%, transparent)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
@@ -145,13 +147,14 @@ export function PayButton({ cartTotal }: PayButtonProps) {
               width: '88px',
               height: '88px',
               borderRadius: '50%',
-              background: 'rgba(46, 160, 67, 0.18)',
-              border: '3px solid #2ea043',
+              background: 'color-mix(in srgb, var(--color-primary) 18%, transparent)',
+              border: '3px solid var(--color-primary)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '40px',
-              boxShadow: '0 0 40px rgba(46, 160, 67, 0.3)',
+              color: 'var(--color-primary)',
+              boxShadow: '0 0 40px color-mix(in srgb, var(--color-primary) 30%, transparent)',
             }}
           >
             ✓
@@ -160,8 +163,9 @@ export function PayButton({ cartTotal }: PayButtonProps) {
           <h2
             style={{
               fontSize: '26px',
+              fontFamily: 'var(--font-fraunces)',
               fontWeight: 800,
-              color: '#e6edf3',
+              color: 'var(--color-text)',
               textAlign: 'center',
               margin: 0,
               lineHeight: 1.2,
@@ -173,7 +177,7 @@ export function PayButton({ cartTotal }: PayButtonProps) {
           <p
             style={{
               fontSize: '15px',
-              color: '#8b949e',
+              color: 'var(--color-text-muted)',
               textAlign: 'center',
               lineHeight: 1.65,
               maxWidth: '320px',
@@ -187,8 +191,8 @@ export function PayButton({ cartTotal }: PayButtonProps) {
           <button
             onClick={() => setShowSuccess(false)}
             style={{
-              background: 'linear-gradient(135deg, #2ea043, #238636)',
-              color: '#fff',
+              background: 'var(--color-primary)',
+              color: 'var(--color-white)',
               border: 'none',
               borderRadius: '14px',
               padding: '0 36px',
@@ -197,7 +201,7 @@ export function PayButton({ cartTotal }: PayButtonProps) {
               cursor: 'pointer',
               minHeight: '56px',
               minWidth: '180px',
-              boxShadow: '0 4px 20px rgba(46,160,67,0.4)',
+              boxShadow: '0 4px 20px color-mix(in srgb, var(--color-primary) 40%, transparent)',
               touchAction: 'manipulation',
             }}
           >

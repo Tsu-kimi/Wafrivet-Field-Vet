@@ -12,6 +12,7 @@
  */
 
 import React, { useEffect, useRef, useState } from 'react';
+import { ShoppingCart } from 'iconsax-react';
 
 export interface CartBadgeProps {
   itemCount: number;
@@ -50,11 +51,11 @@ export function CartBadge({ itemCount, total, updateVersion }: CartBadgeProps) {
         display: 'flex',
         alignItems: 'center',
         gap: '8px',
-        background: 'linear-gradient(135deg, #2ea043, #238636)',
+        background: 'var(--color-primary)',
         borderRadius: '28px',
         padding: '10px 16px',
         minHeight: '52px',
-        boxShadow: '0 4px 24px rgba(46, 160, 67, 0.45)',
+        boxShadow: '0 4px 24px color-mix(in srgb, var(--color-primary) 45%, transparent)',
         cursor: 'default',
         animation: isPulsing ? 'cart-pulse 0.52s ease-out' : 'none',
         transformOrigin: 'center',
@@ -62,15 +63,15 @@ export function CartBadge({ itemCount, total, updateVersion }: CartBadgeProps) {
         backdropFilter: 'blur(6px)',
       }}
     >
-      <span style={{ fontSize: '18px', lineHeight: 1 }} aria-hidden>
-        🛒
+      <span style={{ display: 'flex', alignItems: 'center' }} aria-hidden>
+        <ShoppingCart variant="Bold" size={24} color="var(--color-white)" />
       </span>
       <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
         <span
           style={{
             fontSize: '11px',
             fontWeight: 700,
-            color: 'rgba(255,255,255,0.85)',
+            color: 'color-mix(in srgb, var(--color-white) 85%, transparent)',
             letterSpacing: '0.04em',
           }}
         >
@@ -80,7 +81,7 @@ export function CartBadge({ itemCount, total, updateVersion }: CartBadgeProps) {
           style={{
             fontSize: '14px',
             fontWeight: 800,
-            color: '#fff',
+            color: 'var(--color-white)',
           }}
         >
           ₦{total.toLocaleString('en-NG')}
