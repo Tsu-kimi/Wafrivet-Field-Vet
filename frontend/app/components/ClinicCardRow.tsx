@@ -101,7 +101,7 @@ function ClinicCard({ clinic }: ClinicCardProps) {
         <p
           style={{
             fontSize: '12px',
-            color: '#8b949e',
+            color: 'var(--color-text-muted)',
             margin: 0,
             lineHeight: 1.4,
             display: '-webkit-box',

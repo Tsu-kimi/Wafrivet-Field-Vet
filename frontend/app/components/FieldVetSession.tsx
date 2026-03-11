@@ -279,13 +279,13 @@ export function FieldVetSession() {
               width: '72px',
               height: '72px',
               borderRadius: '50%',
-              border: '4px solid rgba(255,255,255,0.15)',
-              borderTopColor: '#3fb950',
+              border: '4px solid color-mix(in srgb, var(--color-white) 15%, transparent)',
+              borderTopColor: 'var(--color-primary)',
               animation: 'spin 0.9s linear infinite',
               marginBottom: '16px',
             }}
           />
-          <p style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 700, textAlign: 'center', margin: 0 }}>
+          <p style={{ color: 'var(--color-white)', fontSize: '14px', fontWeight: 700, textAlign: 'center', margin: 0 }}>
             Reading label…
           </p>
         </div>
@@ -302,21 +302,21 @@ export function FieldVetSession() {
             left: '16px',
             right: '16px',
             zIndex: 62,
-            background: 'rgba(14, 43, 17, 0.95)',
-            border: '1.5px solid #2ea043',
+            background: 'color-mix(in srgb, var(--color-forest) 95%, transparent)',
+            border: '1.5px solid var(--color-primary)',
             borderRadius: '14px',
             padding: '14px 16px',
             backdropFilter: 'blur(10px)',
             animation: 'slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
           }}
         >
-          <p style={{ margin: '0 0 2px', fontSize: '11px', fontWeight: 700, color: '#3fb950', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          <p style={{ margin: '0 0 2px', fontSize: '11px', fontWeight: 700, color: 'var(--color-primary)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
             ✓ Order confirmed
           </p>
-          <p style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 800, color: '#e6edf3' }}>
+          <p style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 800, color: 'var(--color-white)' }}>
             Ref: {orderConfirmed.order_reference}
           </p>
-          <p style={{ margin: 0, fontSize: '12px', color: '#8b949e' }}>
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-muted)' }}>
             ₦{orderConfirmed.total.toLocaleString('en-NG')} · Delivery: {orderConfirmed.estimated_delivery}
             {orderConfirmed.sms_sent && ' · SMS sent ✓'}
           </p>
