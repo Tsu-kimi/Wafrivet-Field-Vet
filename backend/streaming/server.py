@@ -125,7 +125,7 @@ def _build_run_config() -> RunConfig:
     """
     return RunConfig(
         streaming_mode=StreamingMode.BIDI,
-        response_modalities=[types.Modality.AUDIO],
+        response_modalities=["AUDIO"],  # plain string – avoids Pydantic StrEnum serialization warning
         enable_affective_dialog=True,
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(

@@ -179,6 +179,16 @@ async def run_bridge(
                             live_request_queue.send_content(content)
                             _log("debug", "sent text message", "TEXT_IN")
 
+                    elif msg_type == "INTERRUPT":
+                        # User tapped the stop button. Send 100 ms of silence so
+                        # Gemini's VAD detects end-of-speech and fires event.interrupted,
+                        # which the downstream state machine converts to AUDIO_FLUSH.
+                        silence_100ms = bytes(3200)  # 16kHz × 1ch × 2B × 0.1 s
+                        live_request_queue.send_realtime(
+                            types.Blob(mime_type=_AUDIO_MIME, data=silence_100ms)
+                        )
+                        _log("info", "user interrupt – silence barge-in sent", "INTERRUPT")
+
                     else:
                         _log("warning", f"unknown message type: {msg_type!r}", "UNKNOWN_MSG")
 

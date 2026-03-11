@@ -198,20 +198,47 @@ export function useMediaPipeline({
     await audioCtx.resume();
     audioCtxRef.current = audioCtx;
 
+    // IMPORTANT: Some browsers (especially Android/Chrome Mobile) silently
+    // ignore the sampleRate hint and run the AudioContext at the device's
+    // native rate (44100 Hz or 48000 Hz). We capture the actual rate here
+    // and resample to 16 kHz in the processor if needed, so Gemini Live
+    // always receives exactly 16kHz s16le mono PCM (1007 fix).
+    const actualRate = audioCtx.sampleRate;
+
     const source = audioCtx.createMediaStreamSource(stream);
     sourceRef.current = source;
 
-    // ~100 ms of 16 kHz audio = 1600 samples → nearest power of two = 2048.
-    const bufferSize = nearestPowerOfTwo(Math.round((16_000 * 100) / 1_000));
+    // Buffer ≈ 100 ms at the ACTUAL context rate (not the requested 16 kHz).
+    // Valid ScriptProcessorNode sizes: 256 … 16384 (powers of two only).
+    const bufferSize = nearestPowerOfTwo(Math.round((actualRate * 100) / 1_000));
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
     processorRef.current = processor;
 
     processor.onaudioprocess = (e: AudioProcessingEvent) => {
       const float32 = e.inputBuffer.getChannelData(0);
-      const pcm16   = new Int16Array(float32.length);
-      for (let i = 0; i < float32.length; i++) {
-        const s  = Math.max(-1, Math.min(1, float32[i]));
+
+      // ── Resample to 16 kHz if the context is running at a different rate ──
+      let samples: Float32Array;
+      if (actualRate === 16_000) {
+        samples = float32;
+      } else {
+        // Linear interpolation downsample. Ratio > 1 when actualRate > 16000.
+        const ratio  = actualRate / 16_000;
+        const outLen = Math.round(float32.length / ratio);
+        samples = new Float32Array(outLen);
+        for (let i = 0; i < outLen; i++) {
+          const pos = i * ratio;
+          const lo  = Math.floor(pos);
+          const hi  = Math.min(lo + 1, float32.length - 1);
+          samples[i] = float32[lo] + (float32[hi] - float32[lo]) * (pos - lo);
+        }
+      }
+
+      // ── Convert Float32 → Int16 (s16le) ──────────────────────────────────
+      const pcm16 = new Int16Array(samples.length);
+      for (let i = 0; i < samples.length; i++) {
+        const s  = Math.max(-1, Math.min(1, samples[i]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
       // .slice() produces a transferable copy safe to post via WebSocket.

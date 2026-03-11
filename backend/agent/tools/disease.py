@@ -4,9 +4,9 @@ backend/agent/tools/disease.py
 ADK tool: search_disease_matches
 
 Embeds the farmer's symptom description + visual observations using the
-Vertex AI gemini-embedding-001 model (task_type=RETRIEVAL_QUERY), then runs
-a cosine-similarity search against the disease_content table in Supabase
-using pgvector's <=> operator.
+Vertex AI gemini-embedding-001 model (task_type=RETRIEVAL_QUERY, 3072 dims),
+then runs a cosine-similarity search against the disease_content table in
+Supabase using pgvector's <=> operator.
 
 Returns the top-3 most semantically relevant goat/livestock conditions.
 
@@ -29,14 +29,16 @@ from functools import lru_cache
 from typing import Any, cast
 
 from google.adk.tools.tool_context import ToolContext
+from google import genai as _genai
+from google.genai import types as _genai_types
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
-_EMBEDDING_MODEL_ID = "text-embedding-004"
-_EMBEDDING_DIMENSIONS = 1536
+_EMBEDDING_MODEL_ID = "gemini-embedding-001"  # 3072-dim native; supports up to 3072 via Matryoshka
+_EMBEDDING_DIMENSIONS = 3072
 _TOP_K = 3
 _RETRY_ATTEMPTS = 3
 _RETRY_DELAY = 4  # seconds between Vertex AI retry attempts
@@ -62,16 +64,13 @@ def _get_supabase_client():
 
 
 @lru_cache(maxsize=1)
-def _get_vertex_model():
-    """Return a cached Vertex AI TextEmbeddingModel."""
+def _get_genai_client() -> _genai.Client:
+    """Return a cached google.genai Client configured for Vertex AI."""
     project = os.environ.get("GOOGLE_CLOUD_PROJECT", "").strip()
     location = os.environ.get("GOOGLE_CLOUD_LOCATION", "us-central1").strip()
     if not project:
         raise EnvironmentError("GOOGLE_CLOUD_PROJECT must be set.")
-    import vertexai  # type: ignore
-    from vertexai.language_models import TextEmbeddingModel  # type: ignore
-    vertexai.init(project=project, location=location)
-    return TextEmbeddingModel.from_pretrained(_EMBEDDING_MODEL_ID)
+    return _genai.Client(vertexai=True, project=project, location=location)
 
 
 # ---------------------------------------------------------------------------
@@ -94,23 +93,20 @@ def _embed_query(text: str) -> list[float]:
     Raises:
         RuntimeError: after all retry attempts are exhausted.
     """
-    from vertexai.language_models import TextEmbeddingInput  # type: ignore
-
-    model = _get_vertex_model()
-    # Build as list[str | TextEmbeddingInput] via cast because list is invariant;
-    # without this Pylance infers list[TextEmbeddingInput] which fails the arg-type check.
-    inputs = cast(
-        "list[str | TextEmbeddingInput]",
-        [TextEmbeddingInput(text=text, task_type="RETRIEVAL_QUERY")],
+    client = _get_genai_client()
+    config = _genai_types.EmbedContentConfig(
+        task_type="RETRIEVAL_QUERY",
+        output_dimensionality=_EMBEDDING_DIMENSIONS,
     )
 
     for attempt in range(1, _RETRY_ATTEMPTS + 1):
         try:
-            result = model.get_embeddings(
-                inputs,
-                output_dimensionality=_EMBEDDING_DIMENSIONS,
+            result = client.models.embed_content(
+                model=_EMBEDDING_MODEL_ID,
+                contents=[text],
+                config=config,
             )
-            vec = result[0].values
+            vec: list[float] = result.embeddings[0].values  # type: ignore[index]
             if len(vec) != _EMBEDDING_DIMENSIONS:
                 raise ValueError(
                     f"Expected {_EMBEDDING_DIMENSIONS}-dim vector, got {len(vec)}"
@@ -127,7 +123,6 @@ def _embed_query(text: str) -> list[float]:
                 raise RuntimeError(
                     f"All {_RETRY_ATTEMPTS} embedding attempts failed"
                 ) from exc
-    # Unreachable when _RETRY_ATTEMPTS > 0; required for static type-checker completeness.
     raise RuntimeError(f"No embedding attempts were made (_RETRY_ATTEMPTS={_RETRY_ATTEMPTS})")
 
 

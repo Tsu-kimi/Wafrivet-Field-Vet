@@ -55,12 +55,12 @@ def _import_deps():
     """Import heavy dependencies after environment is validated."""
     try:
         from supabase import create_client, Client  # noqa: F401
-        import vertexai  # noqa: F401
-        from vertexai.language_models import TextEmbeddingInput, TextEmbeddingModel  # noqa: F401
+        from google import genai  # noqa: F401
+        from google.genai import types as genai_types  # noqa: F401
     except ImportError as exc:
         logger.error(
             "Missing dependency: %s\n"
-            "Run: pip install supabase google-cloud-aiplatform python-dotenv",
+            "Run: pip install supabase google-genai python-dotenv",
             exc,
         )
         sys.exit(1)
@@ -69,15 +69,14 @@ def _import_deps():
 # ---------------------------------------------------------------------------
 # Configuration constants
 # ---------------------------------------------------------------------------
-EMBEDDING_MODEL_ID = "text-embedding-004"      # Vertex AI model name
-# gemini-embedding-001 is the conceptual name; the actual SDK model ID is
-# text-embedding-004 (which corresponds to the gemini-embedding-001 Release).
-# The output dimensionality must match the vector(1536) columns in Supabase.
+EMBEDDING_MODEL_ID = "gemini-embedding-001"    # Vertex AI Gemini embedding model (3072-dim native)
+# gemini-embedding-001 supports up to 3072 dimensions via Matryoshka Representation Learning.
+# The output dimensionality must match the vector(3072) columns in Supabase.
 
-EMBEDDING_DIMENSIONS = 1536
+EMBEDDING_DIMENSIONS = 3072
 VERTEX_BATCH_SIZE = 1          # Vertex AI embedding API – 1 text per disease row to be safe
-RETRY_ATTEMPTS = 3
-RETRY_DELAY_SECONDS = 5
+RETRY_ATTEMPTS = 5
+RETRY_DELAY_SECONDS = 15   # gemini-embedding quota = ~5 RPM on free tier; 15 s gap avoids 429
 TABLE_NAME = "disease_content"
 
 
@@ -86,20 +85,20 @@ TABLE_NAME = "disease_content"
 # ---------------------------------------------------------------------------
 
 def _embed_text(
-    model,
+    client,
     text: str,
     task_type: str,
     title: Optional[str] = None,
 ) -> list[float]:
     """
-    Embed a single text string via the Vertex AI TextEmbeddingModel.
+    Embed a single text string via the google.genai Client (Vertex AI).
 
     Args:
-        model:      Loaded TextEmbeddingModel instance.
-        text:       Text to embed.
-        task_type:  "RETRIEVAL_DOCUMENT" for corpus texts,
-                    "RETRIEVAL_QUERY"    for incoming query texts.
-        title:      Optional title hint (improves document embedding quality).
+        client:    Initialised google.genai.Client for Vertex AI.
+        text:      Text to embed.
+        task_type: "RETRIEVAL_DOCUMENT" for corpus texts,
+                   "RETRIEVAL_QUERY"    for incoming query texts.
+        title:     Optional title hint (improves document embedding quality).
 
     Returns:
         A list of floats of length EMBEDDING_DIMENSIONS.
@@ -107,17 +106,22 @@ def _embed_text(
     Raises:
         RuntimeError: if all retry attempts fail.
     """
-    from vertexai.language_models import TextEmbeddingInput  # type: ignore
+    from google.genai import types as genai_types  # type: ignore
 
-    inputs = [TextEmbeddingInput(text=text, task_type=task_type, title=title)]
+    config = genai_types.EmbedContentConfig(
+        task_type=task_type,
+        title=title,
+        output_dimensionality=EMBEDDING_DIMENSIONS,
+    )
 
     for attempt in range(1, RETRY_ATTEMPTS + 1):
         try:
-            embeddings = model.get_embeddings(
-                inputs,
-                output_dimensionality=EMBEDDING_DIMENSIONS,
+            result = client.models.embed_content(
+                model=EMBEDDING_MODEL_ID,
+                contents=[text],
+                config=config,
             )
-            vec = embeddings[0].values
+            vec: list[float] = result.embeddings[0].values  # type: ignore[index]
             if len(vec) != EMBEDDING_DIMENSIONS:
                 raise ValueError(
                     f"Expected {EMBEDDING_DIMENSIONS} dims, got {len(vec)}"
@@ -135,7 +139,6 @@ def _embed_text(
                     f"All {RETRY_ATTEMPTS} embedding attempts failed for text "
                     f"(task={task_type}, first 60 chars: '{text[:60]}')"
                 ) from exc
-    # Unreachable when RETRY_ATTEMPTS > 0; satisfies the static type-checker.
     raise RuntimeError(f"No embedding attempts were made (RETRY_ATTEMPTS={RETRY_ATTEMPTS})")
 
 
@@ -172,16 +175,14 @@ def run(force: bool = False) -> None:
 
     # ---- Init clients -------------------------------------------------------
     from supabase import create_client  # type: ignore
-    import vertexai  # type: ignore
-    from vertexai.language_models import TextEmbeddingModel  # type: ignore
+    from google import genai  # type: ignore
 
     logger.info("Connecting to Supabase at %s", supabase_url)
     db = create_client(supabase_url, supabase_key)
 
-    logger.info("Initialising Vertex AI (project=%s, location=%s)", gcp_project, gcp_location)
-    vertexai.init(project=gcp_project, location=gcp_location)
-    model = TextEmbeddingModel.from_pretrained(EMBEDDING_MODEL_ID)
-    logger.info("Vertex AI embedding model loaded: %s", EMBEDDING_MODEL_ID)
+    logger.info("Initialising google.genai client (project=%s, location=%s)", gcp_project, gcp_location)
+    client = genai.Client(vertexai=True, project=gcp_project, location=gcp_location)
+    logger.info("google.genai client ready, embedding model: %s", EMBEDDING_MODEL_ID)
 
     # ---- Fetch disease rows -------------------------------------------------
     response = db.table(TABLE_NAME).select(
@@ -231,7 +232,7 @@ def run(force: bool = False) -> None:
         if symptoms_text and (not already_has_symptom or force):
             try:
                 symptom_vec = _embed_text(
-                    model,
+                    client,
                     symptoms_text,
                     task_type="RETRIEVAL_DOCUMENT",
                     title=disease_name,
@@ -250,7 +251,7 @@ def run(force: bool = False) -> None:
         if visual_observations and (not already_has_image or force):
             try:
                 image_vec = _embed_text(
-                    model,
+                    client,
                     visual_observations,
                     task_type="RETRIEVAL_DOCUMENT",
                     title=f"{disease_name} – visual observations",
@@ -283,8 +284,8 @@ def run(force: bool = False) -> None:
             logger.error("  Supabase update FAILED for '%s': %s", disease_name, exc)
             errors += 1
 
-        # Brief pause to respect Vertex AI quotas (60 QPM default for free tier)
-        time.sleep(1.0)
+        # Brief pause to respect Vertex AI quotas (gemini-embedding: ~5 RPM on free Vertex tier)
+        time.sleep(15.0)
 
     # ---- Summary ------------------------------------------------------------
     logger.info(
