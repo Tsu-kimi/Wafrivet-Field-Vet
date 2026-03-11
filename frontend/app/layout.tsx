@@ -31,7 +31,7 @@ export const metadata: Metadata = {
     'Real-time multimodal AI veterinary assistant for West African livestock farmers. ' +
     'Talk to the AI, show your animal on camera, get instant diagnosis and treatment.',
   applicationName: 'Wafrivet Field Vet',
-  icons: { icon: '/favicon.ico' },
+  icons: { icon: '/icon.png' },
   // Open Graph for sharing
   openGraph: {
     title: 'Wafrivet Field Vet',
