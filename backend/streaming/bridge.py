@@ -63,7 +63,9 @@ from backend.streaming.events import (
     checkout_link_event,
     clinics_found_event,
     location_confirmed_event,
+    order_confirmed_event,
     products_recommended_event,
+    scanning_product_event,
     tool_error_event,
     turn_complete_event,
 )
@@ -476,6 +478,64 @@ async def _route_tool_response(
                 )
             )
             log_fn("info", f"CLINICS_FOUND ({len(clinics)} clinics, radius={radius_m}m)", "CLINICS_FOUND")
+
+        # ── Phase 3 tool routes ──────────────────────────────────────
+
+        elif tool_name in ("search_products", "find_cheaper_option"):
+            products = data.get("products", [])
+            await websocket.send_json(products_recommended_event(products=products, message=message))
+            logger.info(
+                {
+                    "event": "tool_call",
+                    "tool": tool_name,
+                    "query": data.get("query", ""),
+                    "state": data.get("state", ""),
+                    "products_returned": len(products),
+                    "session_id": session_id,
+                }
+            )
+            log_fn("info", f"PRODUCTS_RECOMMENDED ({len(products)} items) via {tool_name}", "PRODUCTS_RECOMMENDED")
+
+        elif tool_name == "identify_product_from_frame":
+            # The tool sets is_scanning_product=True in session state and returns
+            # action="EXAMINE_PRODUCT_IN_FRAME". Signal the frontend to show the
+            # scanning indicator. The model will read the frame and call
+            # search_products next, which clears the scanning state.
+            await websocket.send_json(scanning_product_event(message=message))
+            log_fn("info", "SCANNING_PRODUCT event sent", "SCANNING_PRODUCT")
+
+        elif tool_name == "update_cart":
+            await websocket.send_json(
+                cart_updated_event(
+                    items=data.get("items", []),
+                    cart_total=data.get("cart_total", 0.0),
+                    message=message,
+                )
+            )
+            log_fn("info", "CART_UPDATED (update_cart)", "CART_UPDATED")
+
+        elif tool_name == "place_order":
+            await websocket.send_json(
+                order_confirmed_event(
+                    order_reference=data.get("order_reference", ""),
+                    total=data.get("total", 0.0),
+                    items=data.get("items", []),
+                    estimated_delivery=data.get("estimated_delivery", "24–48 hours"),
+                    sms_sent=data.get("sms_sent", False),
+                    message=message,
+                )
+            )
+            logger.info(
+                {
+                    "event": "tool_call",
+                    "tool": "place_order",
+                    "order_reference": data.get("order_reference", ""),
+                    "total": data.get("total", 0.0),
+                    "sms_sent": data.get("sms_sent", False),
+                    "session_id": session_id,
+                }
+            )
+            log_fn("info", f"ORDER_CONFIRMED: {data.get('order_reference', '')}", "ORDER_CONFIRMED")
 
         else:
             log_fn("warning", f"unrecognised tool: {tool_name!r}", "UNKNOWN_TOOL")

@@ -82,6 +82,10 @@ class WafrivetSessionState(TypedDict, total=False):
     farmer_lat: Optional[float]
     farmer_lon: Optional[float]
     farmer_lga: Optional[str]
+    # Phase 3 additions
+    last_search_results: list[Any]   # Cached search_products results for add_to_cart
+    is_scanning_product: bool        # True while identify_product_from_frame is active
+    last_order_reference: Optional[str]  # Most recent order reference from place_order
 
 
 # ---------------------------------------------------------------------------
@@ -104,4 +108,8 @@ INITIAL_STATE: dict[str, Any] = {
     "farmer_lat": None,
     "farmer_lon": None,
     "farmer_lga": None,
+    # Phase 3 additions
+    "last_search_results": [],
+    "is_scanning_product": False,
+    "last_order_reference": None,
 }

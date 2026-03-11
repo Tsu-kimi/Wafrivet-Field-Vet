@@ -33,9 +33,9 @@ export const WT = {
   TRANSCRIPTION:         'TRANSCRIPTION',
   /** Agent finished its response turn. */
   TURN_COMPLETE:         'TURN_COMPLETE',
-  /** The ADK recommend_products tool fired: render product cards. */
+  /** The ADK recommend_products or search_products tool fired: render product cards. */
   PRODUCTS_RECOMMENDED:  'PRODUCTS_RECOMMENDED',
-  /** The ADK manage_cart tool fired: refresh cart badge and line items. */
+  /** The ADK manage_cart or update_cart tool fired: refresh cart badge and line items. */
   CART_UPDATED:          'CART_UPDATED',
   /** The ADK generate_checkout_link tool fired: show Pay Now button. */
   CHECKOUT_LINK:         'CHECKOUT_LINK',
@@ -47,6 +47,10 @@ export const WT = {
   TOOL_ERROR:            'TOOL_ERROR',
   /** Terminal Gemini model error (safety, block, token limit, cancel). */
   ERROR:                 'ERROR',
+  /** Phase 3: place_order confirmed; show reference number + SMS notice. */
+  ORDER_CONFIRMED:       'ORDER_CONFIRMED',
+  /** Phase 3: identify_product_from_frame is active; show scanning indicator. */
+  SCANNING_PRODUCT:      'SCANNING_PRODUCT',
 
   // ── Client → Server (JSON frames) ─────────────────────────────────────────
   /** A JPEG camera frame, base64-encoded. */
@@ -80,8 +84,17 @@ export type WTKey = keyof typeof WT;
 export interface Product {
   id: string;
   name: string;
-  /** Price in NGN — stored in the `base_price` column of the products table. */
+  /** Fallback price in NGN from the products table `base_price` column. */
   base_price: number;
+  /**
+   * Distributor-specific price in NGN returned by hybrid_search_products RPC.
+   * Takes priority over base_price when present.
+   */
+  price?: number;
+  /** Reciprocal Rank Fusion score; lower = better match. Results already arrive sorted. */
+  rrf_rank?: number;
+  /** Distributor UUID that supplied this price; null for products without a local distributor. */
+  distributor_id?: string | null;
   /** Relative path e.g. "/images/products/BLT-001.jpg" (Next.js public/). */
   image_url: string;
   description: string;
@@ -206,6 +219,34 @@ export interface ToolErrorEvent {
 }
 
 /**
+ * Phase 3: place_order confirmed.
+ * Display the order reference number and an SMS confirmation notice.
+ */
+export interface OrderConfirmedEvent {
+  type: 'ORDER_CONFIRMED';
+  /** WV-XXXXXX reference string the farmer should keep. */
+  order_reference: string;
+  /** Total amount charged in NGN. */
+  total: number;
+  /** Cart line items at time of confirmation. */
+  items: CartItem[];
+  /** Human-readable delivery window e.g. "24–48 hours". */
+  estimated_delivery: string;
+  /** True if Termii SMS was successfully dispatched. */
+  sms_sent: boolean;
+  message: string;
+}
+
+/**
+ * Phase 3: identify_product_from_frame is in progress.
+ * Show a scanning indicator on the camera overlay until PRODUCTS_RECOMMENDED arrives.
+ */
+export interface ScanningProductEvent {
+  type: 'SCANNING_PRODUCT';
+  message: string;
+}
+
+/**
  * Terminal Gemini model error. Possible codes:
  *   SAFETY | PROHIBITED_CONTENT | BLOCKLIST | MAX_TOKENS | CANCELLED
  * The WebSocket will close after this event.
@@ -236,7 +277,9 @@ export type ServerEvent =
   | ClinicsFoundEvent
   | ToolErrorEvent
   | ModelErrorEvent
-  | InterruptedEvent;
+  | InterruptedEvent
+  | OrderConfirmedEvent
+  | ScanningProductEvent;
 
 // ── Client → Server JSON messages ─────────────────────────────────────────────
 // Binary PCM audio frames are sent as ArrayBuffer — not typed here.

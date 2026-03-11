@@ -126,7 +126,7 @@ steps:
       # Format: ENV_VAR_NAME=SECRET_MANAGER_SECRET_NAME:VERSION
       # The Cloud Run service account needs secretAccessor on each secret.
       # scripts/setup-iam.sh grants this during one-time IAM setup.
-      - --set-secrets=GOOGLE_API_KEY=GOOGLE_API_KEY:latest,SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,PAYSTACK_SECRET_KEY=PAYSTACK_SECRET_KEY:latest,GOOGLE_CLOUD_PROJECT=GOOGLE_CLOUD_PROJECT:latest,GOOGLE_MAPS_KEY=GOOGLE_MAPS_KEY:latest
+      - --set-secrets=GOOGLE_API_KEY=GOOGLE_API_KEY:latest,SUPABASE_URL=SUPABASE_URL:latest,SUPABASE_SERVICE_ROLE_KEY=SUPABASE_SERVICE_ROLE_KEY:latest,PAYSTACK_SECRET_KEY=PAYSTACK_SECRET_KEY:latest,GOOGLE_CLOUD_PROJECT=GOOGLE_CLOUD_PROJECT:latest,GOOGLE_MAPS_KEY=GOOGLE_MAPS_KEY:latest,TERMII_API_KEY=TERMII_API_KEY:latest,TERMII_SENDER_ID=TERMII_SENDER_ID:latest
 
       # Health probes ───────────────────────────────────────────────────────
       # Startup probe: allow up to 60 s for ADK + Supabase client cold-start.

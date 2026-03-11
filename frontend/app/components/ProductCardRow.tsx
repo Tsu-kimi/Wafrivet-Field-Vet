@@ -48,7 +48,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
         }
       }}
       aria-pressed={isActive}
-      aria-label={`${product.name}, ₦${product.base_price.toLocaleString('en-NG')}${isActive ? ', selected' : ''}`}
+      aria-label={`${product.name}, ₦${(product.price ?? product.base_price).toLocaleString('en-NG')}${isActive ? ', selected' : ''}`}
       style={{
         flex: '0 0 160px',
         borderRadius: '16px',
@@ -136,7 +136,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
             margin: 0,
           }}
         >
-          ₦{product.base_price.toLocaleString('en-NG')}
+          ₦{(product.price ?? product.base_price).toLocaleString('en-NG')}
         </p>
 
         <button
@@ -197,7 +197,7 @@ export function ProductCardRow({
           margin: 0,
         }}
       >
-        Recommended treatments ({products.length})
+        Ranked matches ({products.length})
       </p>
 
       {/* Horizontal scroll container — scrollbar hidden via CSS class */}

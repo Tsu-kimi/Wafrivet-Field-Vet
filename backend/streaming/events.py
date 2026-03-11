@@ -15,6 +15,10 @@ Phase 5 contract — these type strings are stable:
     CHECKOUT_LINK          — payment link to present to the farmer
     LOCATION_CONFIRMED     — Nigerian state confirmed in session
     TOOL_ERROR             — a tool call failed; no data available
+
+Phase 3 extensions:
+    ORDER_CONFIRMED        — order placed successfully; show reference + SMS notice
+    SCANNING_PRODUCT       — camera product identification in progress
 """
 from __future__ import annotations
 
@@ -34,6 +38,9 @@ T_CHECKOUT_LINK        = "CHECKOUT_LINK"
 T_LOCATION_CONFIRMED   = "LOCATION_CONFIRMED"
 T_CLINICS_FOUND        = "CLINICS_FOUND"
 T_TOOL_ERROR           = "TOOL_ERROR"
+# Phase 3
+T_ORDER_CONFIRMED      = "ORDER_CONFIRMED"
+T_SCANNING_PRODUCT     = "SCANNING_PRODUCT"
 
 
 # ---------------------------------------------------------------------------
@@ -146,4 +153,47 @@ def tool_error_event(tool_name: str, error: str) -> dict:
         "type":      T_TOOL_ERROR,
         "tool_name": tool_name,
         "error":     error,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 factory helpers
+# ---------------------------------------------------------------------------
+
+def order_confirmed_event(
+    order_reference: str,
+    total: float,
+    items: List[dict],
+    estimated_delivery: str,
+    sms_sent: bool = False,
+    message: str = "",
+) -> dict:
+    """
+    Args:
+        order_reference    — WV-XXXXXX reference string
+        total              — order total in NGN
+        items              — list of cart line items at time of confirmation
+        estimated_delivery — human-readable delivery window string
+        sms_sent           — True if Termii SMS was dispatched successfully
+        message            — optional human-readable summary
+    """
+    return {
+        "type":               T_ORDER_CONFIRMED,
+        "order_reference":    order_reference,
+        "total":              total,
+        "items":              items,
+        "estimated_delivery": estimated_delivery,
+        "sms_sent":           sms_sent,
+        "message":            message,
+    }
+
+
+def scanning_product_event(message: str = "") -> dict:
+    """
+    Emitted when identify_product_from_frame is called.
+    Tells the frontend to show a scanning indicator on the camera overlay.
+    """
+    return {
+        "type":    T_SCANNING_PRODUCT,
+        "message": message or "Scanning product label…",
     }

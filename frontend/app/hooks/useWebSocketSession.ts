@@ -60,6 +60,10 @@ export interface SessionState {
    */
   isAgentSpeaking: boolean;
   lastError: string | null;
+  /** Phase 3: true while identify_product_from_frame is active (SCANNING_PRODUCT received, cleared by PRODUCTS_RECOMMENDED). */
+  isScanningProduct: boolean;
+  /** Phase 3: set to the confirmed order data after ORDER_CONFIRMED event. */
+  orderConfirmed: { order_reference: string; total: number; estimated_delivery: string; sms_sent: boolean; message: string } | null;
 }
 
 export interface UseWebSocketSessionOptions {
@@ -91,7 +95,9 @@ type ReducerAction =
   | { type: 'CLINICS_FOUND'; clinics: Clinic[]; clinicsFallbackMessage: string | null }
   | { type: 'TOOL_ERROR'; tool_name: string; error: string }
   | { type: 'MODEL_ERROR'; code: string; message: string }
-  | { type: 'CLEAR_ERROR' };
+  | { type: 'CLEAR_ERROR' }
+  | { type: 'ORDER_CONFIRMED'; order_reference: string; total: number; estimated_delivery: string; sms_sent: boolean; message: string }
+  | { type: 'SCANNING_PRODUCT'; message: string };
 
 const INITIAL_STATE: SessionState = {
   connectionState: 'idle',
@@ -106,6 +112,8 @@ const INITIAL_STATE: SessionState = {
   transcripts: [],
   isAgentSpeaking: false,
   lastError: null,
+  isScanningProduct: false,
+  orderConfirmed: null,
 };
 
 function sessionReducer(state: SessionState, action: ReducerAction): SessionState {
@@ -134,9 +142,6 @@ function sessionReducer(state: SessionState, action: ReducerAction): SessionStat
         // Rolling window: keep last 50 utterances to bound memory usage.
         transcripts: [...state.transcripts.slice(-49), action.event],
       };
-
-    case 'PRODUCTS_RECOMMENDED':
-      return { ...state, products: action.products };
 
     case 'CART_UPDATED':
       return {
@@ -173,6 +178,25 @@ function sessionReducer(state: SessionState, action: ReducerAction): SessionStat
 
     case 'CLEAR_ERROR':
       return { ...state, lastError: null };
+
+    case 'SCANNING_PRODUCT':
+      return { ...state, isScanningProduct: true };
+
+    case 'ORDER_CONFIRMED':
+      return {
+        ...state,
+        orderConfirmed: {
+          order_reference: action.order_reference,
+          total: action.total,
+          estimated_delivery: action.estimated_delivery,
+          sms_sent: action.sms_sent,
+          message: action.message,
+        },
+      };
+
+    case 'PRODUCTS_RECOMMENDED':
+      // Clear scanning indicator when products arrive after a camera scan.
+      return { ...state, products: action.products, isScanningProduct: false };
 
     default:
       return state;
@@ -287,6 +311,21 @@ export function useWebSocketSession({
 
         case 'PRODUCTS_RECOMMENDED':
           dispatch({ type: 'PRODUCTS_RECOMMENDED', products: raw.products });
+          break;
+
+        case 'ORDER_CONFIRMED':
+          dispatch({
+            type: 'ORDER_CONFIRMED',
+            order_reference: raw.order_reference,
+            total: raw.total,
+            estimated_delivery: raw.estimated_delivery,
+            sms_sent: raw.sms_sent,
+            message: raw.message,
+          });
+          break;
+
+        case 'SCANNING_PRODUCT':
+          dispatch({ type: 'SCANNING_PRODUCT', message: raw.message });
           break;
 
         case 'CART_UPDATED':

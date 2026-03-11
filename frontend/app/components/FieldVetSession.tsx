@@ -64,6 +64,8 @@ export function FieldVetSession() {
     confirmedLocation,
     isAgentSpeaking,
     lastError,
+    isScanningProduct,
+    orderConfirmed,
     sendAudio,
     sendImage,
     sendText,
@@ -252,6 +254,74 @@ export function FieldVetSession() {
         connectionState={connectionState}
         onFirstTap={handleFirstTap}
       />
+
+      {/* ── Scanning product overlay — shown while identify_product_from_frame is active (z=60) */}
+      {isScanningProduct && (
+        <div
+          role="status"
+          aria-live="polite"
+          aria-label="Scanning product label"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 60,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'rgba(0,0,0,0.55)',
+            backdropFilter: 'blur(3px)',
+            pointerEvents: 'none',
+          }}
+        >
+          <div
+            style={{
+              width: '72px',
+              height: '72px',
+              borderRadius: '50%',
+              border: '4px solid rgba(255,255,255,0.15)',
+              borderTopColor: '#3fb950',
+              animation: 'spin 0.9s linear infinite',
+              marginBottom: '16px',
+            }}
+          />
+          <p style={{ color: '#e6edf3', fontSize: '14px', fontWeight: 700, textAlign: 'center', margin: 0 }}>
+            Reading label…
+          </p>
+        </div>
+      )}
+
+      {/* ── Order confirmed banner (z=62) ─────────────────────────────────── */}
+      {orderConfirmed && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'absolute',
+            top: 'calc(16px + var(--spacing-safe-top))',
+            left: '16px',
+            right: '16px',
+            zIndex: 62,
+            background: 'rgba(14, 43, 17, 0.95)',
+            border: '1.5px solid #2ea043',
+            borderRadius: '14px',
+            padding: '14px 16px',
+            backdropFilter: 'blur(10px)',
+            animation: 'slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+        >
+          <p style={{ margin: '0 0 2px', fontSize: '11px', fontWeight: 700, color: '#3fb950', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            ✓ Order confirmed
+          </p>
+          <p style={{ margin: '0 0 6px', fontSize: '16px', fontWeight: 800, color: '#e6edf3' }}>
+            Ref: {orderConfirmed.order_reference}
+          </p>
+          <p style={{ margin: 0, fontSize: '12px', color: '#8b949e' }}>
+            ₦{orderConfirmed.total.toLocaleString('en-NG')} · Delivery: {orderConfirmed.estimated_delivery}
+            {orderConfirmed.sms_sent && ' · SMS sent ✓'}
+          </p>
+        </div>
+      )}
 
       {/* ── Interrupt button — centered, only when AI is speaking (z=70) ─ */}
       {isAgentSpeaking && (
