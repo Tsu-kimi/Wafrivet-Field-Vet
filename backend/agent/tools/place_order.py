@@ -8,7 +8,7 @@ in the commerce flow — once called, the order is committed and an SMS
 confirmation is dispatched to the farmer's phone via the Termii messaging API.
 
 Internally this tool:
-  1. Loads the farmer's active cart from Supabase
+  1. Loads the farmer's active cart from Supabase (via asyncpg + rls_context)
   2. Validates the cart has line items and a non-zero total
   3. Generates a unique order reference in WV-XXXXXX format
   4. Sets cart status to "pending_payment", records order_reference and placed_at
@@ -16,14 +16,17 @@ Internally this tool:
   6. Returns the order reference and estimated delivery window text for Fatima
      to read aloud
 
+Phase 4 change: removed service_role Supabase client. All cart reads and
+updates now go through asyncpg with rls_context(auth_session_id, phone=phone)
+so the anon-role RLS policies are enforced correctly.
+
 Never reveals distributor names, database internals, or system details
 in the returned message — Fatima rephrases naturally.
 
 Environment variables required:
-    SUPABASE_URL              – https://<ref>.supabase.co
-    SUPABASE_SERVICE_ROLE_KEY – Service-role key (read/write to carts)
-    TERMII_API_KEY            – Termii API secret key
-    TERMII_SENDER_ID          – Approved Termii sender ID (default: WafriVet)
+    SUPABASE_DB_URL  – asyncpg DSN (Supabase transaction pooler, port 6543)
+    TERMII_API_KEY   – Termii API secret key
+    TERMII_SENDER_ID – Approved Termii sender ID (default: WafriVet)
 """
 
 from __future__ import annotations
@@ -36,7 +39,6 @@ import secrets
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from functools import lru_cache
 from typing import Any, Optional
 
 from google.adk.tools.tool_context import ToolContext
@@ -45,18 +47,6 @@ logger = logging.getLogger(__name__)
 
 _PHONE_REGEX = re.compile(r"^\+[1-9]\d{6,14}$")
 _TERMII_URL  = "https://api.ng.termii.com/api/sms/send"
-
-
-@lru_cache(maxsize=1)
-def _get_supabase_client():
-    url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-    if not url or not key:
-        raise EnvironmentError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
-        )
-    from supabase import create_client  # type: ignore
-    return create_client(url, key)
 
 
 def _generate_order_ref() -> str:
@@ -147,7 +137,7 @@ def _send_termii_sms(
         return False
 
 
-def place_order(
+async def place_order(
     phone: str,
     tool_context: ToolContext,
     delivery_address: Optional[str] = None,
@@ -186,103 +176,136 @@ def place_order(
             "message": "A valid phone number in E.164 format is required to place an order.",
         }
 
+    # Retrieve RLS session identity from ADK state
+    auth_session_id: str = str(tool_context.state.get("auth_session_id") or "")
+    if not auth_session_id:
+        return {
+            "status": "error",
+            "data":   {},
+            "message": "Session not established. Please reconnect.",
+        }
+
+    from backend.db.rls import rls_context
+
+    # ── 1. Load cart and update atomically within a single RLS transaction ──
+    items: list[dict[str, Any]] = []
+    total: float = 0.0
+    order_ref: str = ""
+    placed_at: str = ""
+
     try:
-        db   = _get_supabase_client()
-        resp = (
-            db.table("carts")
-            .select(
-                "id, items_json, total_amount, status, delivery_address, "
-                "order_reference"
+        async with rls_context(auth_session_id, phone=phone) as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT id, items_json, total_amount, status,
+                       delivery_address, order_reference
+                FROM public.carts
+                WHERE phone = $1
+                """,
+                phone,
             )
-            .eq("phone", phone)
-            .maybe_single()
-            .execute()
-        )
-        cart: Any = getattr(resp, "data", None)
+
+            if not row:
+                return {
+                    "status": "error",
+                    "data":   {},
+                    "message": (
+                        "I could not find an active cart for your number. "
+                        "Please add products to your cart first."
+                    ),
+                }
+
+            cart_status = row["status"]
+            if cart_status not in ("active",):
+                return {
+                    "status": "error",
+                    "data":   {},
+                    "message": (
+                        f"This cart has already been submitted (status: {cart_status}). "
+                        "Start a new session to place another order."
+                    ),
+                }
+
+            items_raw = row["items_json"]
+            if items_raw:
+                if isinstance(items_raw, str):
+                    items = json.loads(items_raw)
+                elif isinstance(items_raw, list):
+                    items = list(items_raw)
+
+            if not items:
+                return {
+                    "status": "error",
+                    "data":   {},
+                    "message": "Your cart is empty. Please add products before placing an order.",
+                }
+
+            total = float(row["total_amount"] or 0)
+            if total <= 0:
+                return {
+                    "status": "error",
+                    "data":   {},
+                    "message": "Cart total is zero. Please add products before placing an order.",
+                }
+
+            # Idempotency: reuse an existing reference if cart was already submitted
+            order_ref = row["order_reference"] or _generate_order_ref()
+            placed_at = datetime.now(timezone.utc).isoformat()
+            resolved_address: Optional[str] = (
+                (delivery_address or "").strip()
+                or row["delivery_address"]
+                or None
+            )
+
+            if resolved_address:
+                await conn.execute(
+                    """
+                    UPDATE public.carts
+                    SET status           = 'pending_payment',
+                        order_reference  = $1,
+                        placed_at        = $2::timestamptz,
+                        delivery_address = $3,
+                        updated_at       = NOW()
+                    WHERE phone = $4
+                    """,
+                    order_ref,
+                    placed_at,
+                    resolved_address,
+                    phone,
+                )
+            else:
+                await conn.execute(
+                    """
+                    UPDATE public.carts
+                    SET status          = 'pending_payment',
+                        order_reference = $1,
+                        placed_at       = $2::timestamptz,
+                        updated_at      = NOW()
+                    WHERE phone = $3
+                    """,
+                    order_ref,
+                    placed_at,
+                    phone,
+                )
+
     except Exception as exc:
-        logger.error("place_order: Supabase read failed: %s", exc)
+        logger.error("place_order: DB operation failed: %s", exc)
         return {
             "status": "error",
             "data":   {},
             "message": "I could not load your cart. Please try again.",
         }
 
-    if not cart:
-        return {
-            "status": "error",
-            "data":   {},
-            "message": (
-                "I could not find an active cart for your number. "
-                "Please add products to your cart first."
-            ),
-        }
-
-    cart_status = cart.get("status", "active")
-    if cart_status not in ("active",):
-        return {
-            "status": "error",
-            "data":   {},
-            "message": (
-                f"This cart has already been submitted (status: {cart_status}). "
-                "Start a new session to place another order."
-            ),
-        }
-
-    items: list[dict[str, Any]] = list(cart.get("items_json") or [])
-    if not items:
-        return {
-            "status": "error",
-            "data":   {},
-            "message": (
-                "Your cart is empty. Please add products before placing an order."
-            ),
-        }
-
-    total = float(cart.get("total_amount", 0))
-    if total <= 0:
-        return {
-            "status": "error",
-            "data":   {},
-            "message": "Cart total is zero. Please add products before placing an order.",
-        }
-
-    # Use existing order_reference if the cart was already placed (idempotency)
-    order_ref: str = cart.get("order_reference") or _generate_order_ref()
-    placed_at  = datetime.now(timezone.utc).isoformat()
-
-    # Resolve delivery address
-    resolved_address: Optional[str] = (
-        (delivery_address or "").strip()
-        or cart.get("delivery_address")
-        or None
-    )
-
-    try:
-        update_data: dict[str, Any] = {
-            "status":          "pending_payment",
-            "order_reference": order_ref,
-            "placed_at":       placed_at,
-        }
-        if resolved_address:
-            update_data["delivery_address"] = resolved_address
-
-        db.table("carts").update(update_data).eq("phone", phone).execute()
-    except Exception as exc:
-        logger.error("place_order: Supabase update failed: %s", exc)
-        return {
-            "status": "error",
-            "data":   {},
-            "message": "Failed to confirm your order. Please try again.",
-        }
-
-    # Dispatch Termii SMS confirmation
+    # ── 2. Dispatch Termii SMS (sync urllib — safe to call from async) ──────
     sms_sent = _send_termii_sms(phone, order_ref, items, total)
 
     if sms_sent:
         try:
-            db.table("carts").update(
-                {"sms_sent_at": placed_at}
-            ).eq("phone", phone).execute()
+            async with rls_context(auth_session_id, phone=phone) as conn:
+                await conn.execute(
+                    "UPDATE public.carts SET sms_sent_at = NOW() WHERE phone = $1",
+                    phone,
+                )
         except Exception:
             pass  # Non-critical — order is already placed
 

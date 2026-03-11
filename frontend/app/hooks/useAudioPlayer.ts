@@ -36,6 +36,15 @@ export interface UseAudioPlayerReturn {
    * NEVER call this inside useEffect or other non-gesture contexts.
    */
   resumeContext: () => void;
+  /**
+   * Suspend the AudioContext — call when the PIN overlay is shown so that
+   * Gemini audio does not play while the user enters their PIN.
+   */
+  suspendAudio: () => void;
+  /**
+   * Resume the AudioContext after the PIN overlay is dismissed.
+   */
+  resumeAudio: () => void;
   /** True while at least one scheduled node is still playing. */
   isAISpeaking: boolean;
 }
@@ -147,5 +156,21 @@ export function useAudioPlayer(): UseAudioPlayerReturn {
     }
   }, []);
 
-  return { playChunk, flush, resumeContext, isAISpeaking };
+  /** Suspend the AudioContext (e.g. when the PIN overlay is shown). */
+  const suspendAudio = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state === 'running') {
+      void ctx.suspend();
+    }
+  }, []);
+
+  /** Resume the AudioContext after the PIN overlay is dismissed. */
+  const resumeAudio = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (ctx && ctx.state === 'suspended') {
+      void ctx.resume();
+    }
+  }, []);
+
+  return { playChunk, flush, resumeContext, suspendAudio, resumeAudio, isAISpeaking };
 }

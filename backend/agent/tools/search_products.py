@@ -15,7 +15,7 @@ alternative product search if not.
 
 Environment variables required:
     SUPABASE_URL              – https://<ref>.supabase.co
-    SUPABASE_SERVICE_ROLE_KEY – Service-role key (read access to products, distributor_inventory)
+    SUPABASE_ANON_KEY         – Anon key (read access to products, distributor_inventory)
     GOOGLE_CLOUD_PROJECT      – GCP project ID for Vertex AI embeddings
     GOOGLE_CLOUD_LOCATION     – GCP region (default: us-central1)
 """
@@ -47,10 +47,10 @@ _MAX_RESULTS           = 5
 @lru_cache(maxsize=1)
 def _get_supabase_client():
     url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
+    key = os.environ.get("SUPABASE_ANON_KEY", "").strip()
     if not url or not key:
         raise EnvironmentError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
+            "SUPABASE_URL and SUPABASE_ANON_KEY must be set."
         )
     from supabase import create_client  # type: ignore
     return create_client(url, key)

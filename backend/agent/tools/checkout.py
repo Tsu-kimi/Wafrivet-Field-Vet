@@ -3,21 +3,24 @@ backend/agent/tools/checkout.py
 
 ADK tool: generate_checkout_link
 
-Generates a Paystack payment link for the farmer's cart total, saves the
-authorization URL to the carts table and session state, and returns the URL
-so the Next.js frontend can render a "Pay Now" button.
+Generates a Paystack payment link for the farmer's cart total, persists the
+authorization URL to the carts table (via asyncpg + rls_context), and returns
+the URL so the Next.js frontend can render a "Pay Now" button.
 
 Uses the Paystack test-mode API (sk_test_... key). Amount is converted from
 Naira to kobo (×100). A unique reference is generated per call. The farmer's
-phone is used as an email placeholder (phone@wafrivet.placeholder) since
-Paystack requires an email field but the app collects phone numbers.
+phone is used as an email placeholder (phone@wafrivet.com) since Paystack
+requires an email field but the app collects phone numbers.
+
+Phase 4 change: removed service_role Supabase client. Cart persistence is now
+done via asyncpg with rls_context(auth_session_id, phone=phone) so the
+anon-role RLS policies are enforced correctly.
 
 Never logs or exposes the raw Paystack secret key.
 
 Environment variables required:
-    SUPABASE_URL              – https://<ref>.supabase.co
-    SUPABASE_SERVICE_ROLE_KEY – Service-role key (write access to carts)
-    PAYSTACK_SECRET_KEY       – sk_test_... or sk_live_...
+    SUPABASE_DB_URL     – asyncpg DSN (Supabase transaction pooler, port 6543)
+    PAYSTACK_SECRET_KEY – sk_test_... or sk_live_...
 """
 
 from __future__ import annotations
@@ -29,7 +32,6 @@ import re
 import uuid
 import urllib.error
 import urllib.request
-from functools import lru_cache
 from typing import Any
 
 from google.adk.tools.tool_context import ToolContext
@@ -38,23 +40,6 @@ logger = logging.getLogger(__name__)
 
 _PAYSTACK_INIT_URL = "https://api.paystack.co/transaction/initialize"
 _PHONE_REGEX = re.compile(r"^\+[1-9]\d{6,14}$")
-
-
-# ---------------------------------------------------------------------------
-# Lazy singleton client
-# ---------------------------------------------------------------------------
-
-@lru_cache(maxsize=1)
-def _get_supabase_client():
-    """Return a cached Supabase client initialised from environment variables."""
-    url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-    if not url or not key:
-        raise EnvironmentError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
-        )
-    from supabase import create_client  # type: ignore
-    return create_client(url, key)
 
 
 # ---------------------------------------------------------------------------
@@ -143,7 +128,7 @@ def _call_paystack(
 # Public ADK tool function
 # ---------------------------------------------------------------------------
 
-def generate_checkout_link(
+async def generate_checkout_link(
     phone: str,
     cart_total: int,
     tool_context: ToolContext,
@@ -172,6 +157,9 @@ def generate_checkout_link(
                 "payment_reference" (str).
             message (str): Human-readable summary or error description.
     """
+    # Extract RLS session identity (set by SessionMiddleware via websocket.state)
+    auth_session_id: str = str(tool_context.state.get("auth_session_id") or "")
+
     # Validate phone
     phone = (phone or "").strip()
     if not _PHONE_REGEX.match(phone):
@@ -239,24 +227,38 @@ def generate_checkout_link(
 
     checkout_url: str = paystack_response["data"]["authorization_url"]
 
-    # Persist checkout_url and payment_reference to the carts table
-    try:
-        db = _get_supabase_client()
-        db.table("carts").upsert(
-            {
-                "phone": phone,
-                "checkout_url": checkout_url,
-                "payment_reference": reference,
-                "status": "pending_payment",
-            },
-            on_conflict="phone",
-        ).execute()
-    except Exception as db_exc:
-        # Non-fatal: log the failure but still return the checkout URL to the
-        # farmer so they can proceed with payment.
-        logger.error(
-            "generate_checkout_link: failed to persist checkout_url to carts: %s",
-            db_exc,
+    # Persist checkout_url and payment_reference to the carts table via asyncpg.
+    # Non-fatal: we return the checkout URL even if DB persistence fails so the
+    # farmer can still complete payment.
+    if auth_session_id:
+        from backend.db.rls import rls_context
+        try:
+            async with rls_context(auth_session_id, phone=phone) as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO public.carts
+                        (phone, checkout_url, payment_reference, status, session_id)
+                    VALUES ($1, $2, $3, 'pending_payment', $4)
+                    ON CONFLICT (phone) DO UPDATE
+                        SET checkout_url      = EXCLUDED.checkout_url,
+                            payment_reference = EXCLUDED.payment_reference,
+                            status            = 'pending_payment',
+                            session_id        = EXCLUDED.session_id,
+                            updated_at        = NOW()
+                    """,
+                    phone,
+                    checkout_url,
+                    reference,
+                    auth_session_id,
+                )
+        except Exception as db_exc:
+            logger.error(
+                "generate_checkout_link: failed to persist checkout_url to carts: %s",
+                db_exc,
+            )
+    else:
+        logger.warning(
+            "generate_checkout_link: no auth_session_id in state — cart not persisted"
         )
 
     # Write to session state

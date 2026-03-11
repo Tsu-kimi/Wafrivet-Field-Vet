@@ -62,8 +62,11 @@ from backend.streaming.events import (
     cart_updated_event,
     checkout_link_event,
     clinics_found_event,
+    identity_verified_event,
     location_confirmed_event,
     order_confirmed_event,
+    payment_confirmed_event,
+    pin_required_event,
     products_recommended_event,
     scanning_product_event,
     tool_error_event,
@@ -87,9 +90,14 @@ async def run_bridge(
     runner: Runner,
     session_service: InMemorySessionService,
     run_config: Any,
+    auth_session_id: str = "",
 ) -> None:
     """
     Manage the full lifetime of one WebSocket streaming session.
+
+    auth_session_id is the JWT-verified session ID (from the HttpOnly cookie).
+    It differs from session_id (the Gemini/ADK session URL parameter) and is
+    used as the Redis key for AWAITING_PIN state checks and pub/sub channels.
 
     Raises nothing — all exceptions are caught internally; the WebSocket is
     closed in the finally block.
@@ -115,6 +123,10 @@ async def run_bridge(
     # is_ai_speaking mirrors whether Gemini is currently producing audio so
     # barge-in handling can discard in-flight chunks immediately.
     session_state: dict = {"is_ai_speaking": False}
+
+    # Resolve the auth_session_id for Redis state checks.
+    # Falls back to session_id if not explicitly provided (Phase 3 compat).
+    _auth_sid: str = auth_session_id or session_id
 
     # ------------------------------------------------------------------
     # Proactive greeting — Fatima speaks first on every session open.
@@ -143,6 +155,72 @@ async def run_bridge(
                 if message["type"] == "websocket.disconnect":
                     _log("info", "client disconnected (upstream)", "DISCONNECT")
                     break
+
+                # ── AWAITING_PIN suppression ────────────────────────────────
+                # When a PIN overlay is active, suppress all messages flowing
+                # to Gemini (except PIN_VERIFIED which is handled below).
+                # Binary audio is also dropped to prevent Gemini from processing
+                # the farmer's speech and generating a response during PIN entry.
+                if "text" in message and message["text"] is not None:
+                    try:
+                        _pre_payload: dict = json.loads(message["text"])
+                    except (json.JSONDecodeError, Exception):
+                        _pre_payload = {}
+
+                    _msg_type = _pre_payload.get("type", "")
+
+                    # ── PIN_VERIFIED: client signals successful PIN check ────
+                    if _msg_type == "PIN_VERIFIED":
+                        farmer_name: str = _pre_payload.get("farmer_name", "")
+                        # Update the ADK session state to mark identity verified.
+                        try:
+                            _session = await session_service.get_session(
+                                app_name=runner.app_name,
+                                user_id=user_id,
+                                session_id=session_id,
+                            )
+                            if _session:
+                                _session.state["farmer_phone_verified"] = True
+                                if farmer_name:
+                                    _session.state["farmer_name"] = farmer_name
+                        except Exception as _exc:
+                            _log("warning", f"Failed to update verified state: {_exc}", "PIN_VERIFIED_ERR")
+
+                        # Session state is now ACTIVE (set by /farmers/pin/verify).
+                        # Inject a Gemini content so Fatima resumes naturally.
+                        _resume_text = (
+                            f"The farmer's identity has been verified successfully. "
+                            f"{f'Their name is {farmer_name}. ' if farmer_name else ''}"
+                            "Please greet them warmly and continue helping with their request."
+                        )
+                        live_request_queue.send_content(
+                            types.Content(
+                                role="user",
+                                parts=[types.Part(text=_resume_text)],
+                            )
+                        )
+                        await websocket.send_json(
+                            identity_verified_event(
+                                farmer_name=farmer_name or None,
+                                message="Identity verified. Fatima is resuming.",
+                            )
+                        )
+                        _log("info", f"PIN verified, session resumed for {farmer_name!r}", "PIN_VERIFIED")
+                        continue
+
+                # Check whether the session is in AWAITING_PIN state.
+                # Done per-message (after PIN_VERIFIED handled above) — Redis GET
+                # is O(1) and takes ~1 ms per call, acceptable at WS message rates.
+                try:
+                    from backend.services.session_state_service import is_awaiting_pin
+                    _in_pin_mode = await is_awaiting_pin(_auth_sid)
+                except Exception:
+                    _in_pin_mode = False
+
+                if _in_pin_mode:
+                    # Silently drop all messages (audio + text) during PIN entry.
+                    _log("debug", "upstream message dropped — AWAITING_PIN", "PIN_SUPPRESS")
+                    continue
 
                 if "bytes" in message and message["bytes"] is not None:
                     # Binary frame → raw PCM audio chunk
@@ -259,6 +337,31 @@ async def run_bridge(
                     # Transient error — keep processing
                     continue
 
+                # ── AWAITING_PIN downstream suppression ─────────────────
+                # After a tool fires that transitions the session to AWAITING_PIN,
+                # we suppress all Gemini output (audio + events) except for the
+                # remainder of the current turn (which carries Fatima's "enter
+                # your PIN" message). The turn_complete event resets interruption.
+                # We sample the state once per tool_response/audio group, not
+                # per event, to avoid excessive Redis calls in tight loops.
+                try:
+                    from backend.services.session_state_service import is_awaiting_pin
+                    _awaiting = await is_awaiting_pin(_auth_sid)
+                except Exception:
+                    _awaiting = False
+
+                if _awaiting:
+                    # Allow tool_response events through (so PIN_REQUIRED is sent)
+                    # but suppress audio and content events.
+                    _has_fn_resp = bool(
+                        event.get_function_responses()
+                        if hasattr(event, "get_function_responses") else []
+                    )
+                    if not _has_fn_resp:
+                        # Suppress audio, transcription, and turn_complete during
+                        # PIN entry so the browser is fully quiet.
+                        continue
+
                 # ── Priority 2: Interruption (barge-in) ──────────────────
                 if event.interrupted:
                     if not is_interrupted:
@@ -340,10 +443,14 @@ async def run_bridge(
     # ------------------------------------------------------------------
     up_task   = asyncio.create_task(upstream_task(), name=f"upstream-{session_id}")
     down_task = asyncio.create_task(downstream_task(), name=f"downstream-{session_id}")
+    sub_task  = asyncio.create_task(
+        _redis_payment_subscriber(websocket, _auth_sid, _log),
+        name=f"redis-sub-{session_id}",
+    )
 
     try:
         done, pending = await asyncio.wait(
-            [up_task, down_task],
+            [up_task, down_task, sub_task],
             return_when=asyncio.FIRST_COMPLETED,
         )
         for t in pending:
@@ -355,6 +462,91 @@ async def run_bridge(
     finally:
         live_request_queue.close()
         _log("info", "bridge closed")
+
+
+# ---------------------------------------------------------------------------
+# Redis pub/sub subscriber — delivers PAYMENT_CONFIRMED to the WebSocket
+# ---------------------------------------------------------------------------
+
+async def _redis_payment_subscriber(
+    websocket: WebSocket,
+    auth_session_id: str,
+    log_fn: Any,
+) -> None:
+    """
+    Subscribe to Redis channel session:{auth_session_id} and forward any
+    PAYMENT_CONFIRMED message to the connected WebSocket as a typed event.
+
+    This task runs for the full lifetime of the WebSocket connection alongside
+    upstream_task and downstream_task. It is cancelled when either of those
+    tasks completes (i.e., at disconnect).
+
+    The payment webhook (/payments/webhook) publishes to this channel after
+    verifying the HMAC signature and updating the cart status to payment_received.
+    """
+    if not auth_session_id:
+        log_fn("warning", "redis subscriber skipped — no auth_session_id", "REDIS_SUB_SKIP")
+        return
+
+    try:
+        from backend.services.redis_client import get_redis
+        redis = get_redis()
+    except RuntimeError:
+        log_fn("warning", "redis not initialised — payment events unavailable", "REDIS_NOT_INIT")
+        return
+
+    channel = f"session:{auth_session_id}"
+    pubsub = redis.pubsub()
+
+    try:
+        await pubsub.subscribe(channel)
+        log_fn("info", f"redis subscriber active on {channel!r}", "REDIS_SUB_START")
+
+        async for message in pubsub.listen():
+            # listen() yields subscription confirmations and data messages alike.
+            if not isinstance(message, dict) or message.get("type") != "message":
+                continue
+
+            raw_data = message.get("data", "")
+            if not isinstance(raw_data, str):
+                # decode_responses=True ensures all values are str, but guard anyway.
+                try:
+                    raw_data = raw_data.decode("utf-8")
+                except Exception:
+                    continue
+
+            try:
+                payload = json.loads(raw_data)
+            except json.JSONDecodeError:
+                log_fn("warning", "redis message not valid JSON", "REDIS_BAD_MSG")
+                continue
+
+            msg_type = payload.get("type", "")
+
+            if msg_type == "PAYMENT_CONFIRMED":
+                ref: str = payload.get("payment_reference", "")
+                try:
+                    await websocket.send_json(
+                        payment_confirmed_event(payment_reference=ref)
+                    )
+                    log_fn("info", f"PAYMENT_CONFIRMED delivered: {ref!r}", "PAYMENT_CONFIRMED")
+                except Exception as send_exc:
+                    log_fn(
+                        "warning",
+                        f"failed to deliver PAYMENT_CONFIRMED: {send_exc}",
+                        "PAYMENT_DELIVER_ERR",
+                    )
+
+    except asyncio.CancelledError:
+        pass
+    except Exception as exc:
+        log_fn("error", f"redis subscriber error: {exc}", "REDIS_SUB_ERR")
+    finally:
+        with contextlib.suppress(Exception):
+            await pubsub.unsubscribe(channel)
+        with contextlib.suppress(Exception):
+            await pubsub.aclose()
+        log_fn("info", "redis subscriber closed", "REDIS_SUB_STOP")
 
 
 # ---------------------------------------------------------------------------
@@ -536,6 +728,43 @@ async def _route_tool_response(
                 }
             )
             log_fn("info", f"ORDER_CONFIRMED: {data.get('order_reference', '')}", "ORDER_CONFIRMED")
+
+        # ── Phase 5 tool routes ─────────────────────────────────────────────────
+
+        elif tool_name == "register_phone":
+            # Emit PIN_REQUIRED so the frontend shows the PIN overlay.
+            phone_out = data.get("phone_number", "")
+            is_ret: bool = resp_dict.get("is_returning", False)
+            await websocket.send_json(
+                pin_required_event(
+                    phone_number=phone_out,
+                    is_returning=is_ret,
+                    message=message,
+                )
+            )
+            logger.info(
+                {
+                    "event": "tool_call",
+                    "tool": "register_phone",
+                    "is_returning": is_ret,
+                    "session_id": session_id,
+                }
+            )
+            log_fn("info", f"PIN_REQUIRED sent (is_returning={is_ret})", "PIN_REQUIRED")
+
+        elif tool_name == "get_order_history":
+            # Fatima narrates the order history aloud — no UI card is emitted.
+            # Just log the structured event for Cloud Run observability.
+            total = data.get("total_orders", 0)
+            logger.info(
+                {
+                    "event": "tool_call",
+                    "tool": "get_order_history",
+                    "total_orders": total,
+                    "session_id": session_id,
+                }
+            )
+            log_fn("info", f"ORDER_HISTORY fetched ({total} orders)", "ORDER_HISTORY")
 
         else:
             log_fn("warning", f"unrecognised tool: {tool_name!r}", "UNKNOWN_TOOL")

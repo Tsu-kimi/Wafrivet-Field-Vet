@@ -86,6 +86,12 @@ class WafrivetSessionState(TypedDict, total=False):
     last_search_results: list[Any]   # Cached search_products results for add_to_cart
     is_scanning_product: bool        # True while identify_product_from_frame is active
     last_order_reference: Optional[str]  # Most recent order reference from place_order
+    # Phase 4 additions (Session Security)
+    auth_session_id: Optional[str]   # JWT-verified session ID from HttpOnly cookie (RLS key)
+    # Phase 5 additions (Soft Identity)
+    farmer_id: Optional[str]         # UUID of the farmers row, set after register_phone success
+    farmer_phone_verified: bool      # True after successful PIN verification
+    farmer_name: Optional[str]       # Farmer display name from the farmers row
 
 
 # ---------------------------------------------------------------------------
@@ -112,4 +118,13 @@ INITIAL_STATE: dict[str, Any] = {
     "last_search_results": [],
     "is_scanning_product": False,
     "last_order_reference": None,
+    # Phase 4 additions (Session Security)
+    # auth_session_id is injected by websocket_endpoint after SessionMiddleware
+    # verifies the JWT cookie. Tools must read this value via
+    # tool_context.state.get("auth_session_id") to scope Supabase queries.
+    "auth_session_id": None,
+    # Phase 5 additions (Soft Identity)
+    "farmer_id": None,
+    "farmer_phone_verified": False,
+    "farmer_name": None,
 }

@@ -29,8 +29,10 @@ from backend.agent.tools.checkout import generate_checkout_link
 from backend.agent.tools.disease import search_disease_matches
 from backend.agent.tools.identify_product import identify_product_from_frame
 from backend.agent.tools.location import update_location
+from backend.agent.tools.order_history import get_order_history
 from backend.agent.tools.place_order import place_order
 from backend.agent.tools.products import recommend_products
+from backend.agent.tools.register_phone import register_phone
 from backend.agent.tools.search_products import find_cheaper_option, search_products
 from backend.agent.tools.update_cart import update_cart
 from backend.agent.tools.vet_clinics import find_nearest_vet_clinic
@@ -109,6 +111,38 @@ Fatima drives the order forward at every step:
 After calling place_order, Fatima always reads the order reference number clearly
 and tells the farmer to keep it. She does not mention distributors, databases,
 stock systems, or payment links unless relevant.
+
+━━━━━━━━━━ IDENTITY & ACCOUNT ━━━━━━━━━━
+
+Farmer identity is tied to their phone number — secured by a 6-digit PIN that
+you MUST NEVER hear, repeat, or receive. The PIN is typed silently on the screen.
+
+Capturing the phone number:
+  As soon as the farmer's phone number is mentioned or confirmed, call register_phone()
+  immediately. Do NOT ask for it again if it's already in the conversation. Convert
+  any local format (e.g. "0801 234 5678") to E.164 (e.g. "+2348012345678") before calling.
+  After calling register_phone, tell the farmer to enter their PIN on the screen.
+  You will resume automatically once the PIN is verified.
+
+After PIN verification:
+  Session state farmer_phone_verified will be True. You may now call get_order_history()
+  when the farmer asks about past orders. Greet a returning farmer by name (from
+  farmer_name in session state) if it is available.
+
+PIN / OTP:
+  NEVER ask the farmer to say or repeat their PIN or OTP aloud.
+  NEVER repeat any digits the farmer says that could be a PIN.
+  If the farmer mentions PIN or OTP digits, redirect them: "Please type it on the screen,
+  not aloud."
+
+register_phone(phone_number, name?, state?)
+  Call as soon as you have the farmer's phone number. Converts any local format to E.164.
+  Do NOT call again if farmer_phone is already set in session state.
+
+get_order_history(limit, offset, status_filter?, date_from?, date_to?)
+  Call when a verified farmer asks about past orders. Only call if
+  farmer_phone_verified is True in session state. If not verified, ask them to complete
+  identity verification first.
 
 ━━━━━━━━━━ TOOL REFERENCE ━━━━━━━━━━
 
@@ -279,6 +313,9 @@ root_agent = LlmAgent(
         # Location & care
         update_location,
         find_nearest_vet_clinic,
+        # Phase 5: Identity & history
+        register_phone,
+        get_order_history,
         # Legacy — kept for backward compat during rollout
         recommend_products,
     ],

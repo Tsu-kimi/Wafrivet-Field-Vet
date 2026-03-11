@@ -23,3 +23,5 @@ export type { PayButtonProps } from './PayButton';
 
 export { InterruptButton } from './InterruptButton';
 export type { InterruptButtonProps } from './InterruptButton';
+
+export { PinOverlay } from './PinOverlay';

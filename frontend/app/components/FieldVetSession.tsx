@@ -46,6 +46,7 @@ import { ClinicCardRow }    from './ClinicCardRow';
 import { CartBadge }        from './CartBadge';
 import { PayButton }        from './PayButton';
 import { InterruptButton }  from './InterruptButton';
+import { PinOverlay }       from './PinOverlay';
 
 import type { Product } from '@/app/types/events';
 
@@ -66,6 +67,8 @@ export function FieldVetSession() {
     lastError,
     isScanningProduct,
     orderConfirmed,
+    pinRequired,
+    paymentConfirmed,
     sendAudio,
     sendImage,
     sendText,
@@ -319,6 +322,39 @@ export function FieldVetSession() {
           <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-muted)' }}>
             ₦{orderConfirmed.total.toLocaleString('en-NG')} · Delivery: {orderConfirmed.estimated_delivery}
             {orderConfirmed.sms_sent && ' · SMS sent ✓'}
+          </p>
+        </div>
+      )}
+
+      {/* ── Payment confirmed banner (z=63) ─────────────────────────────────── */}
+      {paymentConfirmed && (
+        <div
+          role="status"
+          aria-live="polite"
+          style={{
+            position: 'absolute',
+            top: orderConfirmed
+              ? 'calc(130px + var(--spacing-safe-top))'
+              : 'calc(16px + var(--spacing-safe-top))',
+            left: '16px',
+            right: '16px',
+            zIndex: 63,
+            background: 'color-mix(in srgb, #14532d 95%, transparent)',
+            border: '1.5px solid #22c55e',
+            borderRadius: '14px',
+            padding: '14px 16px',
+            backdropFilter: 'blur(10px)',
+            animation: 'slide-up 0.4s cubic-bezier(0.22, 1, 0.36, 1)',
+          }}
+        >
+          <p style={{ margin: '0 0 2px', fontSize: '11px', fontWeight: 700, color: '#22c55e', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+            ✓ Payment received
+          </p>
+          <p style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 800, color: 'var(--color-white)' }}>
+            ₦{paymentConfirmed.amount_ngn.toLocaleString('en-NG')} confirmed
+          </p>
+          <p style={{ margin: 0, fontSize: '12px', color: 'var(--color-text-muted)' }}>
+            Ref: {paymentConfirmed.payment_reference}
           </p>
         </div>
       )}
@@ -609,6 +645,19 @@ export function FieldVetSession() {
             Send
           </button>
         </form>
+      )}
+
+      {/* ── Phase 5 PIN overlay — full-screen, highest z-index (z=200) ────────── */}
+      {pinRequired && (
+        <PinOverlay
+          phoneNumber={pinRequired.phone_number}
+          isReturning={pinRequired.is_returning}
+          onSuccess={() => {
+            // sendPinVerified is called inside PinOverlay via context — it
+            // dispatches IDENTITY_VERIFIED which sets pinRequired to null,
+            // causing this component to unmount automatically.
+          }}
+        />
       )}
     </main>
   );

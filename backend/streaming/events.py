@@ -41,6 +41,10 @@ T_TOOL_ERROR           = "TOOL_ERROR"
 # Phase 3
 T_ORDER_CONFIRMED      = "ORDER_CONFIRMED"
 T_SCANNING_PRODUCT     = "SCANNING_PRODUCT"
+# Phase 5
+T_PIN_REQUIRED         = "PIN_REQUIRED"
+T_IDENTITY_VERIFIED    = "IDENTITY_VERIFIED"
+T_PAYMENT_CONFIRMED    = "PAYMENT_CONFIRMED"
 
 
 # ---------------------------------------------------------------------------
@@ -196,4 +200,63 @@ def scanning_product_event(message: str = "") -> dict:
     return {
         "type":    T_SCANNING_PRODUCT,
         "message": message or "Scanning product label…",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 factory helpers
+# ---------------------------------------------------------------------------
+
+def pin_required_event(
+    phone_number: str,
+    is_returning: bool,
+    message: str = "",
+) -> dict:
+    """
+    Emitted when register_phone fires and the session enters AWAITING_PIN.
+    Triggers the full-screen PIN overlay on the frontend.
+
+    Args:
+        phone_number  — E.164 phone number (shown masked in the overlay UI).
+        is_returning  — True when the farmer has a PIN already (verify flow);
+                        False for first-time PIN setup flow.
+        message       — optional human-readable note from the tool.
+    """
+    return {
+        "type":         T_PIN_REQUIRED,
+        "phone_number": phone_number,
+        "is_returning": is_returning,
+        "message":      message,
+    }
+
+
+def identity_verified_event(
+    farmer_name: Optional[str] = None,
+    message: str = "",
+) -> dict:
+    """
+    Emitted by the bridge after it processes a PIN_VERIFIED upstream message
+    (PIN verified via HTTP; bridge injects Gemini context).
+    Tells the frontend the overlay is dismissed and Fatima has resumed.
+    """
+    return {
+        "type":        T_IDENTITY_VERIFIED,
+        "farmer_name": farmer_name,
+        "message":     message,
+    }
+
+
+def payment_confirmed_event(
+    payment_reference: str,
+    message: str = "",
+) -> dict:
+    """
+    Emitted when a Paystack webhook confirms a payment.
+    The WebSocket bridge delivers this from its Redis pub/sub subscriber.
+    Triggers Fatima to speak the confirmation aloud.
+    """
+    return {
+        "type":              T_PAYMENT_CONFIRMED,
+        "payment_reference": payment_reference,
+        "message":           message or "Your payment has been confirmed.",
     }

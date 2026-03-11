@@ -40,6 +40,7 @@ from typing import AsyncGenerator
 
 import structlog
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from google.adk.agents import LlmAgent
 from google.adk.agents.run_config import RunConfig, StreamingMode
@@ -54,6 +55,12 @@ if _REPO_ROOT not in sys.path:
 
 from backend.agent.agent import root_agent, reflect_and_retry_plugin  # noqa: E402
 from backend.agent.session import INITIAL_STATE  # noqa: E402
+from backend.auth.middleware import SessionMiddleware  # noqa: E402
+from backend.db import pool as db_pool  # noqa: E402
+from backend.routers.farmers import router as farmers_router  # noqa: E402
+from backend.routers.payments import router as payments_router  # noqa: E402
+from backend.routers.sessions import router as sessions_router  # noqa: E402
+from backend.services.redis_client import init_redis, close_redis  # noqa: E402
 from backend.streaming.bridge import run_bridge  # noqa: E402
 from backend.streaming.session_store import (  # noqa: E402
     get_session_handle,
@@ -156,6 +163,14 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator:
 
     log.info("wafrivet_streaming_startup", live_model=_LIVE_MODEL)
 
+    # ── Phase 4: initialise asyncpg connection pool ───────────────────────
+    # The pool targets the Supabase transaction-mode PgBouncer pooler so that
+    # set_config('app.session_id', ..., true) works within transactions.
+    await db_pool.init_pool()
+
+    # ── Phase 5: initialise Redis client (PIN state, pub/sub) ────────────
+    await init_redis()
+
     _session_service = InMemorySessionService()
     live_agent = _build_live_agent()
     _runner = Runner(
@@ -173,6 +188,11 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator:
 
     yield  # ← server is live
 
+    # ── Phase 4: close asyncpg pool on shutdown ───────────────────────────
+    await db_pool.close_pool()
+
+    # ── Phase 5: close Redis client on shutdown ───────────────────────────
+    await close_redis()
     log.info("wafrivet_streaming_shutdown")
 
 
@@ -182,9 +202,40 @@ async def _lifespan(_app: FastAPI) -> AsyncGenerator:
 
 app = FastAPI(
     title="Wafrivet Field Vet — Live Streaming API",
-    version="3.0.0",
+    version="4.0.0",
     lifespan=_lifespan,
 )
+
+# ── Phase 4: CORS ─────────────────────────────────────────────────────────────
+# Restrict origins to the known Vercel frontend domain and local dev.
+# Credentials=True is required so the browser sends the HttpOnly session cookie.
+_allowed_origins: list[str] = [
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_allowed_origins,
+    allow_credentials=True,  # Required for HttpOnly cookie to be sent cross-origin
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
+)
+
+# ── Phase 4: Session Middleware ────────────────────────────────────────────────
+# SessionMiddleware must be added BEFORE CORS so that every response — including
+# CORS preflight 200s — receives the Set-Cookie header.
+# It is added after CORS in Starlette's middleware stack, which means it executes
+# FIRST (middleware stack is LIFO). add_middleware() prepends, so the last
+# add_middleware call wraps the outermost layer.
+app.add_middleware(SessionMiddleware)
+
+# ── Phase 4: Sessions router ──────────────────────────────────────────────────
+app.include_router(sessions_router)
+
+# ── Phase 5: Farmers + Payments routers ───────────────────────────────────────
+app.include_router(farmers_router)
+app.include_router(payments_router)
 
 
 @app.get("/health")
@@ -269,7 +320,45 @@ async def websocket_endpoint(
     await websocket.accept()
     log.info("ws_connected", user_id=user_id, session_id=session_id)
 
-    # ── 2. Get or create ADK session ──────────────────────────────────────
+    # ── 2. Extract auth session_id from SessionMiddleware cookie state ────
+    # SessionMiddleware (Phase 4) runs over WebSocket upgrade requests and
+    # stores the verified JWT session_id in scope["state"]["session_id"].
+    # websocket.state reads from the same scope dict.
+    auth_session_id: str = getattr(websocket.state, "session_id", session_id)
+    is_new_auth_session: bool = getattr(websocket.state, "new_session", False)
+    device_fingerprint: str = getattr(websocket.state, "device_fingerprint", "")
+
+    # ── 3. Persist new sessions to Supabase via asyncpg ──────────────────
+    if is_new_auth_session:
+        from backend.db.rls import rls_context
+        from datetime import datetime, timedelta, timezone
+        from backend.auth.session import SESSION_TTL_HOURS
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=SESSION_TTL_HOURS)
+        try:
+            async with rls_context(auth_session_id) as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO public.sessions
+                        (session_id, device_fingerprint, expires_at)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (session_id) DO UPDATE
+                        SET last_active_at = NOW()
+                    """,
+                    auth_session_id,
+                    device_fingerprint[:128],
+                    expires_at,
+                )
+            log.info("auth_session_persisted", auth_session_id=auth_session_id)
+        except Exception as _exc:
+            log.warning(
+                "auth_session_persist_failed",
+                auth_session_id=auth_session_id,
+                error=str(_exc),
+            )
+            # Non-fatal: continue — session may not be persisted but the
+            # WS conversation can still proceed.
+
+    # ── 4. Get or create ADK session ─────────────────────────────────────
     assert _session_service is not None, "session_service not initialised"
     assert _runner is not None, "runner not initialised"
     assert _run_config is not None, "run_config not initialised"
@@ -288,15 +377,23 @@ async def websocket_endpoint(
             # (InMemorySessionService does not persist across restarts)
             pass  # Will be created below with the same session_id
 
+        # Include auth_session_id in state so ADK tools can use it for
+        # RLS-scoped Supabase queries via rls_context(auth_session_id).
+        initial_state = dict(INITIAL_STATE)
+        initial_state["auth_session_id"] = auth_session_id
+
         await _session_service.create_session(
             app_name=_APP_NAME,
             user_id=user_id,
             session_id=session_id,
-            state=dict(INITIAL_STATE),
+            state=initial_state,
         )
-        log.info("session_created", user_id=user_id, session_id=session_id)
+        log.info("session_created", user_id=user_id, session_id=session_id, auth_session_id=auth_session_id)
     else:
-        log.info("session_resumed", user_id=user_id, session_id=session_id)
+        # Ensure auth_session_id is always up to date in existing session state.
+        if existing.state.get("auth_session_id") != auth_session_id:
+            existing.state["auth_session_id"] = auth_session_id
+        log.info("session_resumed", user_id=user_id, session_id=session_id, auth_session_id=auth_session_id)
 
     # Structured session_open log — visible in Cloud Run log stream during demo.
     import json as _json, logging as _logging
@@ -313,7 +410,7 @@ async def websocket_endpoint(
     # Persist the mapping so the client can reconnect
     upsert_session_handle(user_id=user_id, session_id=session_id)
 
-    # ── 3. Guard Gemini Live concurrent session quota ─────────────────────
+    # ── 5. Guard Gemini Live concurrent session quota ─────────────────────
     # Rejects new connections immediately when the API limit is already
     # reached, so we never get a 1011 RESOURCE_EXHAUSTED from Gemini.
     assert _gemini_semaphore is not None, "gemini_semaphore not initialised"
@@ -327,7 +424,7 @@ async def websocket_endpoint(
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return
 
-    # ── 4. Hand off to bridge ─────────────────────────────────────────────
+    # ── 6. Hand off to bridge ─────────────────────────────────────────────
     async with _gemini_semaphore:
         try:
             await run_bridge(
@@ -337,6 +434,7 @@ async def websocket_endpoint(
                 runner=_runner,
                 session_service=_session_service,
                 run_config=_run_config,
+                auth_session_id=auth_session_id,
             )
         except WebSocketDisconnect:
             log.info("ws_disconnected", user_id=user_id, session_id=session_id)

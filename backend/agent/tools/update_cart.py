@@ -10,12 +10,11 @@ e.g. "change the quantity to 2" or "actually, remove the ivermectin".
 Fully idempotent: calling with the same arguments produces the same cart state.
 Passing quantity=0 removes the line item entirely.
 
-The tool reuses the same Supabase upsert pattern as manage_cart so cart
-state remains consistent across both tools.
+Phase 4 change: switched from service_role Supabase client to asyncpg with
+rls_context so anon-role RLS policies are enforced correctly.
 
 Environment variables required:
-    SUPABASE_URL              – https://<ref>.supabase.co
-    SUPABASE_SERVICE_ROLE_KEY – Service-role key (read/write access to carts)
+    SUPABASE_DB_URL – asyncpg DSN (Supabase transaction pooler, port 6543)
 """
 
 from __future__ import annotations
@@ -23,7 +22,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-from functools import lru_cache
 from typing import Any
 
 from google.adk.tools.tool_context import ToolContext
@@ -31,18 +29,6 @@ from google.adk.tools.tool_context import ToolContext
 logger = logging.getLogger(__name__)
 
 _PHONE_REGEX = re.compile(r"^\+[1-9]\d{6,14}$")
-
-
-@lru_cache(maxsize=1)
-def _get_supabase_client():
-    url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
-    if not url or not key:
-        raise EnvironmentError(
-            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set."
-        )
-    from supabase import create_client  # type: ignore
-    return create_client(url, key)
 
 
 def _validate_phone(phone: str) -> str:
@@ -71,7 +57,7 @@ def _calculate_total(items: list[dict[str, Any]]) -> float:
     return sum(float(item.get("subtotal", 0)) for item in items)
 
 
-def update_cart(
+async def update_cart(
     phone: str,
     product_id: str,
     quantity: int,
@@ -123,69 +109,93 @@ def update_cart(
             "message": "Quantity must be 0 (remove) or a positive integer.",
         }
 
-    # Cart must not be a placed/completed order
-    cart = _load_cart(phone)
-    if not cart:
+    # Retrieve RLS session identity from ADK state
+    auth_session_id: str = str(tool_context.state.get("auth_session_id") or "")
+    if not auth_session_id:
         return {
             "status": "error",
             "data":   {},
-            "message": "No active cart found for this phone number.",
+            "message": "Session not established. Please reconnect.",
         }
 
-    if cart.get("status") not in ("active", None):
-        return {
-            "status": "error",
-            "data":   {},
-            "message": (
-                "This cart has already been submitted and cannot be modified."
-            ),
-        }
-
-    current_items: list[dict[str, Any]] = list(cart.get("items_json") or [])
-
-    # Find the target item
-    found = any(item.get("product_id") == product_id for item in current_items)
-    if not found:
-        return {
-            "status": "error",
-            "data":   {},
-            "message": f"Product {product_id!r} is not in the cart.",
-        }
-
-    if quantity == 0:
-        # Remove the item
-        updated_items = [
-            item for item in current_items
-            if item.get("product_id") != product_id
-        ]
-        action_msg = "Item removed from your cart."
-    else:
-        # Update quantity
-        updated_items = []
-        for item in current_items:
-            if item.get("product_id") == product_id:
-                unit_price = float(item.get("unit_price", 0))
-                updated_items.append({
-                    **item,
-                    "quantity": quantity,
-                    "subtotal": round(unit_price * quantity, 2),
-                })
-            else:
-                updated_items.append(item)
-        action_msg = f"Quantity updated to {quantity}."
-
-    new_total = _calculate_total(updated_items)
+    import json as _json
+    from backend.db.rls import rls_context
 
     try:
-        db = _get_supabase_client()
-        db.table("carts").update(
-            {
-                "items_json":   updated_items,
-                "total_amount": round(new_total, 2),
-            }
-        ).eq("phone", phone).execute()
+        async with rls_context(auth_session_id, phone=phone) as conn:
+            row = await conn.fetchrow(
+                "SELECT id, items_json, total_amount, status "
+                "FROM public.carts WHERE phone = $1",
+                phone,
+            )
+
+            if not row:
+                return {
+                    "status": "error",
+                    "data":   {},
+                    "message": "No active cart found for this phone number.",
+                }
+
+            if row["status"] not in ("active", None):
+                return {
+                    "status": "error",
+                    "data":   {},
+                    "message": "This cart has already been submitted and cannot be modified.",
+                }
+
+            items_raw = row["items_json"]
+            current_items: list[dict[str, Any]] = []
+            if items_raw:
+                if isinstance(items_raw, str):
+                    current_items = _json.loads(items_raw)
+                elif isinstance(items_raw, list):
+                    current_items = list(items_raw)
+
+            found = any(item.get("product_id") == product_id for item in current_items)
+            if not found:
+                return {
+                    "status": "error",
+                    "data":   {},
+                    "message": f"Product {product_id!r} is not in the cart.",
+                }
+
+            if quantity == 0:
+                updated_items = [
+                    item for item in current_items
+                    if item.get("product_id") != product_id
+                ]
+                action_msg = "Item removed from your cart."
+            else:
+                updated_items = []
+                for item in current_items:
+                    if item.get("product_id") == product_id:
+                        unit_price = float(item.get("unit_price", 0))
+                        updated_items.append({
+                            **item,
+                            "quantity": quantity,
+                            "subtotal": round(unit_price * quantity, 2),
+                        })
+                    else:
+                        updated_items.append(item)
+                action_msg = f"Quantity updated to {quantity}."
+
+            new_total = _calculate_total(updated_items)
+
+            await conn.execute(
+                """
+                UPDATE public.carts
+                SET items_json   = $1::jsonb,
+                    total_amount = $2,
+                    updated_at   = NOW()
+                WHERE phone = $3
+                """,
+                _json.dumps(updated_items),
+                round(new_total, 2),
+                phone,
+            )
+
     except Exception as exc:
-        logger.error("update_cart: Supabase write failed: %s", exc)
+        logger.error("update_cart: DB operation failed: %s", exc)
         return {
             "status": "error",
             "data":   {},
