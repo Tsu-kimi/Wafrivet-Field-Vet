@@ -71,6 +71,7 @@ export function FieldVetSession() {
     flushAudio,
     resumeContext,
     sendLocationData,
+    clearError,
   } = useWebSocketContext();
 
   // ── Geolocation ─────────────────────────────────────────────────────────────
@@ -117,16 +118,30 @@ export function FieldVetSession() {
   // ── Error Logging & Notifications ───────────────────────────────────────────
   const [errorLog, setErrorLog] = useState<{id: number, message: string, time: Date}[]>([]);
   const [toastError, setToastError] = useState<string | null>(null);
+  const [isToastVisible, setIsToastVisible] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
 
   useEffect(() => {
     if (lastError) {
       setToastError(lastError);
+      setIsToastVisible(true);
       setErrorLog((prev) => [...prev, { id: Date.now(), message: lastError, time: new Date() }]);
-      const timer = setTimeout(() => {
+      
+      // Step 1: Trigger the CSS exit animation at 4.5 seconds
+      const hideTimer = setTimeout(() => {
+        setIsToastVisible(false);
+      }, 4500);
+
+      // Step 2: Completely remove the text from DOM and clear context at 5 seconds
+      const clearTimer = setTimeout(() => {
         setToastError(null);
+        clearError();
       }, 5000);
-      return () => clearTimeout(timer);
+
+      return () => {
+        clearTimeout(hideTimer);
+        clearTimeout(clearTimer);
+      };
     }
   }, [lastError]);
 
@@ -264,8 +279,8 @@ export function FieldVetSession() {
       <div
         style={{
           position: 'absolute',
-          top: 'calc(14px + 40px + 10px + var(--spacing-safe-top))', // Under Globe (14px top + 40px globe + 10px gap)
-          right: '16px', // Align with the Globe on the right edge
+          top: 'calc(14px + var(--spacing-safe-top))',
+          right: '16px', // Align with the right edge
           zIndex: 65,
         }}
       >
@@ -344,8 +359,8 @@ export function FieldVetSession() {
           position: 'absolute',
           top: 'calc(14px + var(--spacing-safe-top))',
           left: '50%',
-          transform: `translateX(-50%) translateY(${toastError ? '0' : '-200%'}) scale(${toastError ? '1' : '0.85'})`,
-          opacity: toastError ? 1 : 0,
+          transform: `translateX(-50%) translateY(${isToastVisible ? '0' : '-200%'}) scale(${isToastVisible ? '1' : '0.85'})`,
+          opacity: isToastVisible ? 1 : 0,
           background: 'color-mix(in srgb, var(--color-surface) 90%, transparent)',
           border: '1px solid var(--color-border)',
           borderRadius: '999px',

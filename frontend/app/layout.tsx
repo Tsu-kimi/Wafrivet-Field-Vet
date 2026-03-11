@@ -52,7 +52,7 @@ export const viewport: Viewport = {
   maximumScale: 1,
   userScalable: false,
   viewportFit: 'cover',
-  themeColor: '#0a0e14',
+  themeColor: '#D9E0D0', // Bone
 };
 
 // ── Root layout (Server Component) ────────────────────────────────────────────

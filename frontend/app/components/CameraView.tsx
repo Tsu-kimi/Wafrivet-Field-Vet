@@ -115,48 +115,6 @@ export function CameraView({
         />
       )}
 
-      {/* ── Frame-sent flash — top-right ────────────────────────────────── */}
-      {isCapturing && (
-        <div
-          role="status"
-          aria-label="Sending video frames"
-          style={{
-            position: 'absolute',
-            top: 'calc(12px + var(--spacing-safe-top))',
-            right: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            background: 'rgba(0,0,0,0.55)',
-            borderRadius: '20px',
-            padding: '4px 9px',
-            zIndex: 10,
-          }}
-        >
-          <span
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: 'var(--color-accent)',
-              display: 'inline-block',
-              animation: 'frame-flash 1.5s steps(1, end) infinite',
-            }}
-          />
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 700,
-              color: 'var(--color-text)',
-              lineHeight: 1,
-              letterSpacing: '0.06em',
-            }}
-          >
-            CAM
-          </span>
-        </div>
-      )}
-
       {/* ── Connection status chip — top-center ─────────────────────────── */}
       {connectionState !== 'connected' && (
         <div
@@ -224,7 +182,6 @@ export function CameraView({
               fontWeight: 700,
               textAlign: 'center',
               padding: '0 40px',
-              textShadow: '0 2px 8px rgba(0,0,0,0.9)',
               lineHeight: 1.5,
             }}
           >
@@ -236,7 +193,6 @@ export function CameraView({
               fontSize: '13px',
               textAlign: 'center',
               padding: '0 48px',
-              textShadow: '0 1px 4px rgba(0,0,0,0.8)',
             }}
           >
             Allow mic &amp; camera access for AI vet assistance

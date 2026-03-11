@@ -78,6 +78,8 @@ export interface WebSocketContextValue extends SessionState {
    * Wire to the first meaningful tap/click on the page shell before audio arrives.
    */
   resumeContext: () => void;
+  /** Clear the lastError from the session state to allow it to trigger effects again. */
+  clearError: () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
@@ -140,6 +142,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     sendInterrupt,
     sendSessionContext,
     sendLocationData,
+    clearError,
   } = useWebSocketSession({
     wsBaseUrl,
     userId:    ids?.userId    ?? '',
@@ -165,6 +168,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       sendSessionContext,
       sendLocationData,
       resumeContext,
+      clearError,
     }),
     [
       state,
@@ -177,6 +181,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       sendSessionContext,
       sendLocationData,
       resumeContext,
+      clearError,
     ],
   );
 

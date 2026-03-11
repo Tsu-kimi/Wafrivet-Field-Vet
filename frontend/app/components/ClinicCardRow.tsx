@@ -83,7 +83,7 @@ function ClinicCard({ clinic }: ClinicCardProps) {
         style={{
           fontSize: '14px',
           fontWeight: 700,
-          color: '#e6edf3',
+          color: 'var(--color-text)',
           lineHeight: 1.3,
           margin: 0,
           // Clamp to 2 lines
@@ -124,7 +124,7 @@ function ClinicCard({ clinic }: ClinicCardProps) {
               flex: 1,
               background: 'rgba(46,160,67,0.15)',
               border: '1px solid rgba(46,160,67,0.5)',
-              color: '#3fb950',
+              color: 'var(--color-primary)',
               fontSize: '12px',
               fontWeight: 700,
               borderRadius: '10px',
@@ -189,7 +189,7 @@ function FallbackCard({ message }: { message: string }) {
       <p
         style={{
           fontSize: '13px',
-          color: '#e6edf3',
+          color: 'var(--color-text)',
           lineHeight: 1.5,
           margin: 0,
         }}

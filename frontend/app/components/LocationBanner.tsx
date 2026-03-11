@@ -55,7 +55,7 @@ export function LocationBanner({
         right: '16px',
         display: 'flex',
         justifyContent: 'space-between',
-        alignItems: 'center',
+        alignItems: 'flex-start', // Align to top to allow individual top-offsets if needed
         zIndex: 55,
         pointerEvents: 'none', // Allow clicks to pass through the container
       }}>
@@ -107,6 +107,7 @@ export function LocationBanner({
             backdropFilter: 'blur(8px)',
             pointerEvents: 'auto', // Re-enable clicks for the link
             transition: 'background 0.2s',
+            marginTop: '50px', // Below the notification icon (40px icon + 10px gap)
           }}
           aria-label="Visit Wafrivet website"
         >

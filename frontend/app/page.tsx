@@ -1,19 +1,22 @@
+'use client';
+
 /**
- * app/page.tsx — Root page Server Component.
+ * app/page.tsx — Root page.
  *
- * This file MUST NOT contain 'use client'. It is a Server Component.
- *
- * It renders FieldVetSession as its only child. FieldVetSession is a
- * Client Component, so its interactive logic executes on the client.
- *
- * In Next.js App Router, a Server Component that renders a Client Component
- * is the correct pattern for splitting server-controlled routing from
- * client-controlled interactivity. No data fetching is needed at the page
- * level — all state arrives via the WebSocket connection.
+ * It conditionally renders the Onboarding carousel on first load.
+ * Once the user completes onboarding, it mounts the FieldVetSession.
  */
 
+import React, { useState } from 'react';
 import { FieldVetSession } from './components/FieldVetSession';
+import { Onboarding } from './components/Onboarding';
 
 export default function Home() {
+  const [showOnboarding, setShowOnboarding] = useState(true);
+
+  if (showOnboarding) {
+    return <Onboarding onComplete={() => setShowOnboarding(false)} />;
+  }
+
   return <FieldVetSession />;
 }

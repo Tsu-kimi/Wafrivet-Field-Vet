@@ -73,7 +73,6 @@ export function InterruptButton({
           letterSpacing: '0.06em',
           lineHeight: 1,
           userSelect: 'none',
-          textShadow: '0 1px 3px rgba(0,0,0,0.4)',
         }}
       >
         Stop

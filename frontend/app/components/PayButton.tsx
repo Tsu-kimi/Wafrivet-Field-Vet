@@ -106,7 +106,6 @@ export function PayButton({ cartTotal }: PayButtonProps) {
           letterSpacing: '0.01em',
           WebkitTapHighlightColor: 'transparent',
           touchAction: 'manipulation',
-          textShadow: '0 1px 3px rgba(0,0,0,0.25)',
           transition: 'background 0.2s ease, box-shadow 0.2s ease',
         }}
         aria-label={`Pay ₦${cartTotal.toLocaleString('en-NG')} now with Paystack`}

@@ -90,7 +90,8 @@ type ReducerAction =
   | { type: 'LOCATION_CONFIRMED'; state: string }
   | { type: 'CLINICS_FOUND'; clinics: Clinic[]; clinicsFallbackMessage: string | null }
   | { type: 'TOOL_ERROR'; tool_name: string; error: string }
-  | { type: 'MODEL_ERROR'; code: string; message: string };
+  | { type: 'MODEL_ERROR'; code: string; message: string }
+  | { type: 'CLEAR_ERROR' };
 
 const INITIAL_STATE: SessionState = {
   connectionState: 'idle',
@@ -169,6 +170,9 @@ function sessionReducer(state: SessionState, action: ReducerAction): SessionStat
 
     case 'MODEL_ERROR':
       return { ...state, lastError: `${action.code}: ${action.message}` };
+
+    case 'CLEAR_ERROR':
+      return { ...state, lastError: null };
 
     default:
       return state;
@@ -455,6 +459,10 @@ export function useWebSocketSession({
     [],
   );
 
+  const clearError = useCallback(() => {
+    dispatch({ type: 'CLEAR_ERROR' });
+  }, []);
+
   return {
     state,
     sendAudioChunk,
@@ -463,5 +471,6 @@ export function useWebSocketSession({
     sendInterrupt,
     sendSessionContext,
     sendLocationData,
+    clearError,
   };
 }
