@@ -23,9 +23,11 @@ const FARMER_KEY  = 'wafrivet_farmer';  // localStorage key for logged-in farmer
 type Step =
   | 'phone'         // Enter phone number
   | 'pin'           // Enter existing PIN
-  | 'pin_setup'     // Create new PIN (first time or post-OTP reset)
+  | 'pin_setup'     // Create new PIN (first time, post-OTP reset, or register)
   | 'otp_request'   // Enter phone to receive OTP (forgot PIN)
   | 'otp_verify';   // Enter OTP + new PIN
+
+type Mode = 'login' | 'register';
 
 // ── Helper: format phone for display ─────────────────────────────────────────
 
@@ -148,6 +150,7 @@ export default function LoginPage() {
   const [otp, setOtp]                 = useState('');
   const [newPin, setNewPin]           = useState('');
   const [newPinConfirm, setNewPinConfirm] = useState('');
+  const [mode, setMode]               = useState<Mode>('login');
   const [error, setError]             = useState<string | null>(null);
   const [loading, setLoading]         = useState(false);
 
@@ -171,7 +174,8 @@ export default function LoginPage() {
       return;
     }
     setPhoneE164(e164);
-    setStep('pin');
+    // Register: skip login attempt, go straight to PIN creation.
+    setStep(mode === 'register' ? 'pin_setup' : 'pin');
   };
 
   // ── Step 2: PIN login ─────────────────────────────────────────────────────
@@ -269,30 +273,20 @@ export default function LoginPage() {
   const handleOtpRequest = async () => {
     clearError();
     setLoading(true);
-    const url = `${API_BASE}/farmers/pin/reset/request`;
-    const body = JSON.stringify({ phone_number: phoneE164 });
-    console.log('[OTP Request] API_BASE:', API_BASE);
-    console.log('[OTP Request] URL:', url);
-    console.log('[OTP Request] Body:', body);
     try {
-      const res = await fetch(url, {
+      const res = await fetch(`${API_BASE}/farmers/pin/reset/request`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body,
+        body: JSON.stringify({ phone_number: phoneE164 }),
       });
-      console.log('[OTP Request] Response status:', res.status, res.statusText);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        console.log('[OTP Request] Error response body:', data);
         setError(data?.detail ?? 'Could not send OTP. Please try again.');
         return;
       }
-      const data = await res.json().catch(() => ({}));
-      console.log('[OTP Request] Success response body:', data);
       setStep('otp_verify');
-    } catch (err) {
-      console.error('[OTP Request] Fetch exception:', err);
+    } catch {
       setError('Could not reach the server. Check your connection.');
     } finally {
       setLoading(false);
@@ -454,6 +448,36 @@ export default function LoginPage() {
         {/* ── Step 1: Phone ──────────────────────────────────────────────── */}
         {step === 'phone' && (
           <>
+            {/* Login / Register tab switcher */}
+            <div style={{
+              display: 'flex',
+              background: 'var(--color-surface)',
+              borderRadius: '10px',
+              padding: '4px',
+              marginBottom: '24px',
+              gap: '4px',
+            }}>
+              {(['login', 'register'] as Mode[]).map((m) => (
+                <button
+                  key={m}
+                  onClick={() => { setMode(m); clearError(); }}
+                  style={{
+                    flex: 1,
+                    padding: '10px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: mode === m ? 'var(--color-primary)' : 'transparent',
+                    color: mode === m ? 'var(--color-white)' : 'var(--color-text-muted)',
+                    fontWeight: mode === m ? 700 : 500,
+                    fontSize: '14px',
+                    cursor: 'pointer',
+                    transition: 'background 0.2s, color 0.2s',
+                  }}
+                >
+                  {m === 'login' ? 'Sign In' : 'Register'}
+                </button>
+              ))}
+            </div>
             <label style={labelStyle} htmlFor="phone">Phone number</label>
             <input
               id="phone"
@@ -473,7 +497,7 @@ export default function LoginPage() {
               onClick={handlePhoneSubmit}
               disabled={loading || phone.trim().length < 10}
             >
-              Continue
+              {mode === 'register' ? 'Create Account' : 'Continue'}
             </button>
           </>
         )}
@@ -509,11 +533,13 @@ export default function LoginPage() {
           </>
         )}
 
-        {/* ── Step 2b: PIN setup (first time) ───────────────────────────── */}
+        {/* ── Step 2b: PIN setup (first time / register) ────────────────── */}
         {step === 'pin_setup' && (
           <>
             <p style={{ ...subtitleStyle, color: 'var(--color-text)', marginBottom: '20px' }}>
-              Welcome! Create a 6-digit PIN to secure your account.
+              {mode === 'register'
+                ? `Create a 6-digit PIN for ${maskPhone(phoneE164)}.`
+                : 'Welcome! Create a 6-digit PIN to secure your account.'}
             </p>
             <p style={{ ...labelStyle, textAlign: 'center', marginBottom: '10px' }}>Create PIN</p>
             <PinInput value={pin} onChange={setPin} disabled={loading || pin.length === 6} autoFocus />
@@ -537,6 +563,14 @@ export default function LoginPage() {
             >
               ← Back
             </button>
+            {mode === 'register' && (
+              <button
+                style={{ ...linkStyle, marginTop: '8px' }}
+                onClick={() => { setMode('login'); setStep('phone'); setPin(''); setPinConfirm(''); clearError(); }}
+              >
+                Already have an account? Sign in
+              </button>
+            )}
           </>
         )}
 
