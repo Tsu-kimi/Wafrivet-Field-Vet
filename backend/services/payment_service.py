@@ -78,7 +78,7 @@ def verify_webhook_signature(
         return False
 
     secret_env_key = (
-        "PAYSTACK_WEBHOOK_SECRET"
+        "PAYSTACK_SECRET_KEY"   # Paystack signs webhooks with the same secret key
         if provider == "paystack"
         else "FLUTTERWAVE_WEBHOOK_SECRET"
     )
@@ -91,10 +91,12 @@ def verify_webhook_signature(
         return False
 
     try:
+        # Paystack uses HMAC-SHA512; Flutterwave uses SHA-256.
+        algorithm = hashlib.sha512 if provider == "paystack" else hashlib.sha256
         expected = hmac.new(
             secret.encode("utf-8"),
             raw_body,
-            hashlib.sha256,
+            algorithm,
         ).hexdigest()
         return hmac.compare_digest(expected, signature_header.strip())
     except Exception as exc:  # noqa: BLE001
