@@ -12,7 +12,6 @@
  *   z=38  CartBadge         — floating bottom-right, only when cart non-empty
  *   z=45  PayButton         — full-width at bottom, only when checkoutUrl set
  *   z=55  LocationBanner    — bottom sheet until location confirmed
- *   z=70  InterruptButton   — centered, only while AI is speaking
  *
  * Event wiring (all handled in useWebSocketSession reducer; effects here
  * drive animation triggers and imperative side-effects):
@@ -22,7 +21,6 @@
  *   LOCATION_CONFIRMED   → confirmedLocation → LocationBanner pill
  *   binary frames        → onAudioChunk → audioPlayer (in WebSocketProvider)
  *   AUDIO_FLUSH          → onAudioFlush → flush (in WebSocketProvider)
- *   interrupted          → sendInterrupt() + flushAudio() via InterruptButton
  *   unhandled events     → console.warn in useWebSocketSession switch default
  */
 
@@ -92,13 +90,17 @@ export function FieldVetSession() {
   // find_nearest_vet_clinic can be called immediately when needed.
   const gpsSentRef = useRef(false);
   useEffect(() => {
-    if (
-      lat !== null &&
-      lon !== null &&
-      connectionState === 'connected' &&
-      !gpsSentRef.current
-    ) {
+    if (lat !== null && lon !== null && !gpsSentRef.current) {
+      if (connectionState !== 'connected') {
+        console.log(
+          `[FieldVetSession] GPS resolved (lat=${lat}, lon=${lon}, state="${detectedState}") but WS is "${connectionState}" — will send once connected`,
+        );
+        return;
+      }
       gpsSentRef.current = true;
+      console.log(
+        `[FieldVetSession] Sending LOCATION_DATA to backend — lat=${lat}, lon=${lon}, state="${detectedState}", lga="${lga}"`,
+      );
       sendLocationData(lat, lon, detectedState, lga);
     }
   }, [lat, lon, connectionState, detectedState, lga, sendLocationData]);

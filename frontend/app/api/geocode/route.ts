@@ -1,21 +1,24 @@
 /**
  * app/api/geocode/route.ts
  *
- * Server-side Next.js API route — reverse geocodes a lat/lon pair using the
- * Google Geocoding API. The GOOGLE_MAPS_KEY environment variable is accessed
- * only here, never in browser-side JavaScript.
+ * Server-side Next.js API route — reverse geocodes a lat/lon pair.
+ *
+ * Strategy:
+ *   1. Google Geocoding API  — primary (requires GOOGLE_MAPS_KEY env var)
+ *   2. OpenStreetMap Nominatim — automatic fallback when key is absent
  *
  * Request:  GET /api/geocode?lat=<number>&lon=<number>
  * Response: { state, lga, formattedAddress }  on success
  *           { error: string }                 on failure
  *
- * Status codes mirrored from Google:
+ * Status codes mirrored from Google when Google is used:
  *   200 — geocode succeeded
  *   404 — ZERO_RESULTS (remote or ocean coordinates)
  *   400 — missing or invalid parameters
- *   500 — GOOGLE_MAPS_KEY not set or unexpected API error
  *   429 — OVER_QUERY_LIMIT
  *   403 — REQUEST_DENIED (key restriction or billing issue)
+ *   500 — unexpected API error or fetch failure
+ *   503 — all providers failed (Google key absent and Nominatim also failed)
  *
  * Extracts:
  *   administrative_area_level_1 → state  (Nigerian state, e.g. "Rivers State")
@@ -29,6 +32,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const GEOCODING_BASE = 'https://maps.googleapis.com/maps/api/geocode/json';
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
+const NOMINATIM_UA   = 'WafriAI/1.0 (+https://github.com/Tsu-kimi/Wafrivet-Field-Vet)';
+
+// ── Google Geocoding types ────────────────────────────────────────────────────
 
 interface AddressComponent {
   long_name: string;
@@ -47,6 +54,69 @@ interface GeocodingResponse {
   results: GeocodingResult[];
   error_message?: string;
 }
+
+// ── Nominatim fallback ────────────────────────────────────────────────────────
+
+interface NominatimResponse {
+  display_name?: string;
+  address?: {
+    state?: string;
+    state_district?: string;
+    county?: string;
+    city?: string;
+    town?: string;
+    country_code?: string;
+  };
+  error?: string;
+}
+
+async function geocodeViaNominatim(
+  lat: number,
+  lon: number,
+): Promise<{ state: string; lga: string | null; formattedAddress: string } | null> {
+  const url = new URL(NOMINATIM_BASE);
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('lat', String(lat));
+  url.searchParams.set('lon', String(lon));
+  url.searchParams.set('zoom', '10');
+  url.searchParams.set('addressdetails', '1');
+
+  console.log(`[/api/geocode] Nominatim fallback for lat=${lat}, lon=${lon}`);
+
+  try {
+    const resp = await fetch(url.toString(), {
+      headers: { 'User-Agent': NOMINATIM_UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!resp.ok) {
+      console.warn(`[/api/geocode] Nominatim HTTP ${resp.status}`);
+      return null;
+    }
+    const data = await resp.json() as NominatimResponse;
+    if (data.error || !data.address) {
+      console.warn('[/api/geocode] Nominatim error or no address:', data.error);
+      return null;
+    }
+    const state = data.address.state ?? null;
+    if (!state) {
+      console.warn('[/api/geocode] Nominatim response has no state field');
+      return null;
+    }
+    const lga = data.address.state_district
+      ?? data.address.county
+      ?? data.address.city
+      ?? data.address.town
+      ?? null;
+    const formattedAddress = data.display_name ?? state;
+    console.log(`[/api/geocode] Nominatim resolved → state="${state}", lga="${lga}"`);
+    return { state, lga, formattedAddress };
+  } catch (err) {
+    console.error('[/api/geocode] Nominatim fetch error:', err);
+    return null;
+  }
+}
+
+// ── Route handler ─────────────────────────────────────────────────────────────
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
   const params = request.nextUrl.searchParams;
@@ -74,11 +144,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // ── API key — server-side only ────────────────────────────────────────────
   const apiKey = process.env.GOOGLE_MAPS_KEY;
   if (!apiKey) {
-    console.error('[/api/geocode] GOOGLE_MAPS_KEY environment variable is not set');
-    return NextResponse.json(
-      { error: 'Geocoding service is not configured' },
-      { status: 500 },
-    );
+    // Key not configured in Vercel env vars — fall back to Nominatim immediately.
+    console.warn('[/api/geocode] GOOGLE_MAPS_KEY not set — using Nominatim fallback');
+    const result = await geocodeViaNominatim(lat, lon);
+    if (result) return NextResponse.json(result);
+    return NextResponse.json({ error: 'Geocoding service unavailable' }, { status: 503 });
   }
 
   // ── Call Google Geocoding API (server-side) ───────────────────────────────
@@ -94,8 +164,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let geoData: GeocodingResponse;
   try {
     const resp = await fetch(url.toString(), {
-      // Cache for 5 minutes — GPS accuracy rarely changes coordinates by more
-      // than a few metres between refreshes within a session.
+      // The API key has an HTTP Referer restriction. Server-side fetch does not
+      // send Referer automatically, so we set it explicitly to satisfy the
+      // allowed referrer configured in Google Cloud Console.
+      headers: { Referer: 'https://wafrivet-field-vet.vercel.app/' },
+      // Cache for 5 minutes — GPS accuracy rarely changes within a session.
       next: { revalidate: 300 },
     });
     if (!resp.ok) {
@@ -126,13 +199,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         { status: 429 },
       );
     case 'REQUEST_DENIED':
-      console.error('[/api/geocode] REQUEST_DENIED:', geoData.error_message);
+      console.error('[/api/geocode] REQUEST_DENIED:', geoData.error_message,
+        '— verify GOOGLE_MAPS_KEY in Vercel env vars and that the HTTP Referer restriction includes wafrivet-field-vet.vercel.app');
       return NextResponse.json(
         { error: 'Geocoding request denied' },
         { status: 403 },
       );
     default:
-      console.error('[/api/geocode] Unexpected status:', geoData.status);
+      console.error('[/api/geocode] Unexpected status:', geoData.status, geoData.error_message);
       return NextResponse.json(
         { error: 'Geocoding failed' },
         { status: 500 },
@@ -145,12 +219,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // administrative_area_level_1 and _level_2 may appear in different results.
   let state: string | null = null;
   let lga: string | null = null;
-  let formattedAddress: string = '';
+  let formattedAddress = '';
 
   for (const result of geoData.results) {
-    if (!formattedAddress) {
-      formattedAddress = result.formatted_address;
-    }
+    if (!formattedAddress) formattedAddress = result.formatted_address;
     for (const component of result.address_components) {
       if (!state && component.types.includes('administrative_area_level_1')) {
         state = component.long_name;
@@ -165,7 +237,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   if (!state) {
     console.warn(`[/api/geocode] No administrative_area_level_1 found for lat=${lat}, lon=${lon}. Google status=${geoData.status}, results=${geoData.results.length}`);
     return NextResponse.json(
-      { error: 'Could not determine Nigerian state from these coordinates' },
+      { error: 'Could not determine state from these coordinates' },
       { status: 404 },
     );
   }

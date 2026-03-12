@@ -32,17 +32,19 @@ from google.adk.tools.tool_context import ToolContext
 
 def identify_product_from_frame(tool_context: ToolContext) -> dict[str, Any]:
     """
-    Signal Fatima to read the product label visible in the live camera feed
-    and surface matching products from the catalogue.
+    Read a physical product label that is CURRENTLY VISIBLE in the live camera
+    feed and search the catalogue for a match.
 
-    This tool takes no parameters because the Gemini Live model can already
-    see the camera feed. Call it whenever the farmer says something that
-    implies they are showing a physical product label to the camera, such as:
-      - "do you have this?"
-      - "can you see this product?"
-      - "what is this called?"
-      - "I want to buy this" (while pointing camera at a label)
-      - "check what I'm showing you"
+    PRECONDITION — only call this tool when ALL of the following are true:
+      1. You can already see a physical object (bottle, sachet, bag, box, syringe)
+         being deliberately held up or pointed at the camera in the current frame.
+      2. The farmer's intent is clearly to identify or buy that specific product
+         (e.g. "do you have this?", "can I get this?", "what is this product?",
+         "I want to buy what I'm showing you", "check this label").
+      3. Do NOT call this tool for purely verbal product requests where nothing
+         is being shown to the camera — use search_products directly instead.
+      4. Do NOT call this tool if the camera shows only the farmer's face,
+         background, or an empty frame.
 
     Returns:
         A directive dict instructing the model on the precise extraction task.
@@ -56,18 +58,21 @@ def identify_product_from_frame(tool_context: ToolContext) -> dict[str, Any]:
         "status": "success",
         "action": "EXAMINE_PRODUCT_IN_FRAME",
         "directive": (
-            "Carefully examine the product label currently visible in the live "
-            "video stream. Extract as much of the following as you can read clearly:"
-            "\n• Brand name (e.g. Terramycin LA, Albendazole Suspension)"
-            "\n• Generic or active ingredient name (e.g. oxytetracycline, ivermectin)"
-            "\n• Concentration or dosage strength (e.g. 20%, 1%, 200 mg)"
-            "\n• Manufacturer or company name"
-            "\n• NAFDAC registration number if visible"
-            "\n\nIf you can read the label clearly, say 'I can see [product name]' "
-            "and immediately call search_products with the brand name or active "
-            "ingredient as the query string. "
-            "If the label is blurry or not clearly visible, ask the farmer to hold "
-            "the product closer and keep it still so you can read it."
+            "You have been asked to read a product label from the live video stream. "
+            "First, confirm there is a physical product clearly in frame:\n"
+            "• If NO product or label is visible, say exactly: "
+            "'I cannot see a product clearly — could you hold it up closer to the camera?' "
+            "and do NOT call search_products.\n"
+            "• If a product IS visible, read as much of the label as you can:\n"
+            "  – Brand name (e.g. Terramycin LA, Albendazole Suspension)\n"
+            "  – Generic or active ingredient (e.g. oxytetracycline, ivermectin)\n"
+            "  – Concentration / dosage strength (e.g. 20%, 1%, 200 mg)\n"
+            "  – Manufacturer name\n"
+            "  – NAFDAC registration number if visible\n"
+            "Then say 'I can see [product name]' and immediately call search_products "
+            "with the brand name or active ingredient as the query string.\n"
+            "If the label is present but blurry, ask the farmer to hold it closer "
+            "and stay still before trying again."
         ),
         "message": "Examining product label from camera feed.",
     }
