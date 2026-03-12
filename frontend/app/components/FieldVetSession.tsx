@@ -85,30 +85,45 @@ export function FieldVetSession() {
     isLoading: geoLoading,
   } = useGeolocation();
 
-  // Send GPS coordinates to the backend once they resolve.
-  // This populates farmer_lat / farmer_lon in the ADK session state so
-  // find_nearest_vet_clinic can be called immediately when needed.
+  // Send GPS coordinates to the backend as soon as lat/lon resolve so
+  // find_nearest_vet_clinic can be called immediately, even before geocoding.
   const gpsSentRef = useRef(false);
   useEffect(() => {
     if (lat !== null && lon !== null && !gpsSentRef.current) {
       if (connectionState !== 'connected') {
         console.log(
-          `[FieldVetSession] GPS resolved (lat=${lat}, lon=${lon}, state="${detectedState}") but WS is "${connectionState}" — will send once connected`,
+          `[FieldVetSession] GPS resolved (lat=${lat}, lon=${lon}) but WS is "${connectionState}" — will send once connected`,
         );
         return;
       }
       gpsSentRef.current = true;
       console.log(
-        `[FieldVetSession] Sending LOCATION_DATA to backend — lat=${lat}, lon=${lon}, state="${detectedState}", lga="${lga}"`,
+        `[FieldVetSession] Sending LOCATION_DATA (GPS only) — lat=${lat}, lon=${lon}`,
+      );
+      // Send coords immediately (state may still be null — geocoding in progress)
+      sendLocationData(lat, lon, null, null);
+    }
+  }, [lat, lon, connectionState, sendLocationData]);
+
+  // Once geocoding resolves, send a second LOCATION_DATA with the state name.
+  // This always runs even if GPS coords were already sent, so the backend
+  // receives the geocoded state independently of the raw GPS send above.
+  const stateSentRef = useRef(false);
+  useEffect(() => {
+    if (detectedState && !stateSentRef.current && connectionState === 'connected') {
+      stateSentRef.current = true;
+      console.log(
+        `[FieldVetSession] Sending LOCATION_DATA (geocoded) — state="${detectedState}", lga="${lga}"`,
       );
       sendLocationData(lat, lon, detectedState, lga);
     }
-  }, [lat, lon, connectionState, detectedState, lga, sendLocationData]);
+  }, [detectedState, connectionState, lat, lon, lga, sendLocationData]);
 
-  // Reset the sent flag on reconnect so GPS is re-sent after a session drop.
+  // Reset both flags on reconnect so location is re-sent after a session drop.
   useEffect(() => {
     if (connectionState === 'connecting') {
       gpsSentRef.current = false;
+      stateSentRef.current = false;
     }
   }, [connectionState]);
 

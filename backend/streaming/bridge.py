@@ -289,9 +289,12 @@ async def run_bridge(
                                     if lga_val:
                                         session.state["farmer_lga"] = str(lga_val)
                                     state_val = payload.get("state")
-                                    if state_val and not session.state.get("farmer_state"):
+                                    # Always update state when provided — a second
+                                    # LOCATION_DATA carries the geocoded value which
+                                    # is more reliable than the initial GPS-only send.
+                                    if state_val:
                                         session.state["farmer_state"] = str(state_val)
-                                    _log("info", f"GPS stored: lat={lat}, lon={lon}", "LOCATION_DATA")
+                                    _log("info", f"GPS stored: lat={lat}, lon={lon}, state={state_val!r}", "LOCATION_DATA")
                             except Exception as exc:
                                 _log("warning", f"Failed to store GPS in session: {exc}", "LOCATION_DATA_ERR")
 
@@ -433,6 +436,12 @@ async def run_bridge(
                         "code": "RESOURCE_EXHAUSTED",
                         "message": "The AI service is at capacity. Please wait 30 seconds and try again.",
                     })
+            elif "1000" in exc_str or "operation was cancelled" in exc_str.lower():
+                # Code 1000 = Gemini Live clean session timeout (~5 min idle).
+                # This is expected behaviour, not an application error.
+                _log("info", "Gemini Live session closed (1000 — normal timeout)", "SESSION_TIMEOUT")
+                with contextlib.suppress(Exception):
+                    await websocket.send_json({"type": "SESSION_EXPIRED", "message": "Session timed out. Please reconnect."})
             else:
                 _log("error", f"downstream error: {exc}", "DOWNSTREAM_ERR", tb=_traceback.format_exc())
         finally:

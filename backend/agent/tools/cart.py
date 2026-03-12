@@ -90,7 +90,7 @@ def _fetch_product(product_id: str) -> dict[str, Any]:
         .select("id, name, base_price")
         .eq("id", product_id)
         .eq("is_active", True)
-        .single()
+        .maybe_single()  # returns None instead of raising PGRST116 on 0 rows
         .execute()
     )
     raw: Any = getattr(response, "data", None)

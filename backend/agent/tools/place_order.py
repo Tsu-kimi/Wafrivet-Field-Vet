@@ -250,7 +250,9 @@ async def place_order(
 
             # Idempotency: reuse an existing reference if cart was already submitted
             order_ref = row["order_reference"] or _generate_order_ref()
-            placed_at = datetime.now(timezone.utc).isoformat()
+            # asyncpg requires a datetime object for timestamptz columns, not an ISO string
+            placed_at_dt: datetime = datetime.now(timezone.utc)
+            placed_at: str = placed_at_dt.isoformat()
             resolved_address: Optional[str] = (
                 (delivery_address or "").strip()
                 or row["delivery_address"]
@@ -263,13 +265,13 @@ async def place_order(
                     UPDATE public.carts
                     SET status           = 'pending_payment',
                         order_reference  = $1,
-                        placed_at        = $2::timestamptz,
+                        placed_at        = $2,
                         delivery_address = $3,
                         updated_at       = NOW()
                     WHERE phone = $4
                     """,
                     order_ref,
-                    placed_at,
+                    placed_at_dt,
                     resolved_address,
                     phone,
                 )
@@ -279,12 +281,12 @@ async def place_order(
                     UPDATE public.carts
                     SET status          = 'pending_payment',
                         order_reference = $1,
-                        placed_at       = $2::timestamptz,
+                        placed_at       = $2,
                         updated_at      = NOW()
                     WHERE phone = $3
                     """,
                     order_ref,
-                    placed_at,
+                    placed_at_dt,
                     phone,
                 )
 
