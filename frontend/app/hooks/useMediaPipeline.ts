@@ -9,8 +9,8 @@
  * Audio path:
  *   getUserMedia({ audio: { channelCount: 1, sampleRate: 16000,
  *                           echoCancellation: true, noiseSuppression: true } })
- *   → ScriptProcessorNode (Float32 PCM)
- *   → convert to Int16 ArrayBuffer at 16 kHz
+ *   → AudioWorkletNode ('pcm-processor' — /public/pcm-processor.js)
+ *   → resamples to 16 kHz + converts Float32 → Int16 in audio thread
  *   → onAudioChunk(ArrayBuffer)   [caller sends as binary WS frame]
  *
  * Video path:
@@ -27,8 +27,9 @@
  * On useEffect cleanup, track.stop() is called on every MediaStream track.
  * This is MANDATORY to extinguish the camera LED when the component unmounts.
  *
- * NOTE: ScriptProcessorNode is deprecated but remains the most reliable
- * audio capture path on Android WebView / Chrome Mobile as of 2026.
+ * NOTE: AudioWorkletNode (replacing the deprecated ScriptProcessorNode)
+ * runs audio processing in a dedicated rendering thread, eliminating main-
+ * thread jank and the Chrome deprecation warning.
  */
 
 import { useRef, useCallback, useState, useEffect } from 'react';
@@ -76,19 +77,6 @@ export interface UseMediaPipelineReturn {
   toggleCamera: () => void;
 }
 
-// ── Utility ───────────────────────────────────────────────────────────────────
-
-/**
- * Round n up to the nearest power of two.
- * ScriptProcessorNode requires bufferSize ∈ {256, 512, 1024, 2048, 4096, …}.
- */
-function nearestPowerOfTwo(n: number): number {
-  if (n <= 0) return 256;
-  let p = 1;
-  while (p < n) p <<= 1;
-  return p;
-}
-
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useMediaPipeline({
@@ -106,11 +94,11 @@ export function useMediaPipeline({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   // Internal — not exposed.
-  const streamRef    = useRef<MediaStream | null>(null);
-  const audioCtxRef  = useRef<AudioContext | null>(null);
-  const sourceRef    = useRef<MediaStreamAudioSourceNode | null>(null);
-  const processorRef = useRef<ScriptProcessorNode | null>(null);
-  const frameTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const streamRef      = useRef<MediaStream | null>(null);
+  const audioCtxRef    = useRef<AudioContext | null>(null);
+  const sourceRef      = useRef<MediaStreamAudioSourceNode | null>(null);
+  const workletNodeRef = useRef<AudioWorkletNode | null>(null);
+  const frameTimerRef  = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Ref guard: prevents double-invocation before the state re-render settles.
   const isCapturingRef = useRef(false);
@@ -134,7 +122,8 @@ export function useMediaPipeline({
         clearInterval(frameTimerRef.current);
       }
       sourceRef.current?.disconnect();
-      processorRef.current?.disconnect();
+      workletNodeRef.current?.disconnect();
+      workletNodeRef.current?.port.close();
       void audioCtxRef.current?.close();
       // MANDATORY: stop() every track so the browser removes the camera LED.
       streamRef.current?.getTracks().forEach(t => t.stop());
@@ -222,60 +211,33 @@ export function useMediaPipeline({
     await audioCtx.resume();
     audioCtxRef.current = audioCtx;
 
-    // IMPORTANT: Some browsers (especially Android/Chrome Mobile) silently
-    // ignore the sampleRate hint and run the AudioContext at the device's
-    // native rate (44100 Hz or 48000 Hz). We capture the actual rate here
-    // and resample to 16 kHz in the processor if needed, so Gemini Live
-    // always receives exactly 16kHz s16le mono PCM (1007 fix).
-    const actualRate = audioCtx.sampleRate;
-
+    // NOTE: Some browsers silently ignore the sampleRate hint and run the
+    // AudioContext at the device's native rate (44100 / 48000 Hz). The worklet
+    // reads `sampleRate` from its global scope and resamples to 16 kHz
+    // automatically, so Gemini Live always receives 16 kHz s16le mono PCM.
     const source = audioCtx.createMediaStreamSource(stream);
     sourceRef.current = source;
 
-    // Buffer ≈ 100 ms at the ACTUAL context rate (not the requested 16 kHz).
-    // Valid ScriptProcessorNode sizes: 256 … 16384 (powers of two only).
-    const bufferSize = nearestPowerOfTwo(Math.round((actualRate * 100) / 1_000));
-    // eslint-disable-next-line @typescript-eslint/no-deprecated
-    const processor = audioCtx.createScriptProcessor(bufferSize, 1, 1);
-    processorRef.current = processor;
+    // ── AudioWorkletNode (replaces deprecated ScriptProcessorNode) ────────
+    // The worklet runs in the audio rendering thread — no main-thread jank.
+    // /pcm-processor.js is served as a Next.js static file from /public/.
+    await audioCtx.audioWorklet.addModule('/pcm-processor.js');
 
-    processor.onaudioprocess = (e: AudioProcessingEvent) => {
-      const float32 = e.inputBuffer.getChannelData(0);
+    const workletNode = new AudioWorkletNode(audioCtx, 'pcm-processor', {
+      processorOptions: { targetRate: 16_000 },
+    });
+    workletNodeRef.current = workletNode;
 
-      // ── Resample to 16 kHz if the context is running at a different rate ──
-      let samples: Float32Array;
-      if (actualRate === 16_000) {
-        samples = float32;
-      } else {
-        // Linear interpolation downsample. Ratio > 1 when actualRate > 16000.
-        const ratio  = actualRate / 16_000;
-        const outLen = Math.round(float32.length / ratio);
-        samples = new Float32Array(outLen);
-        for (let i = 0; i < outLen; i++) {
-          const pos = i * ratio;
-          const lo  = Math.floor(pos);
-          const hi  = Math.min(lo + 1, float32.length - 1);
-          samples[i] = float32[lo] + (float32[hi] - float32[lo]) * (pos - lo);
-        }
-      }
-
-      // ── Convert Float32 → Int16 (s16le) ──────────────────────────────────
-      const pcm16 = new Int16Array(samples.length);
-      for (let i = 0; i < samples.length; i++) {
-        const s  = Math.max(-1, Math.min(1, samples[i]));
-        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
-      }
-
-      // Skip sending if muted
+    // Receive resampled, Int16-encoded PCM chunks from the audio thread.
+    workletNode.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
       if (!isMutedRef.current) {
-        // .slice() produces a transferable copy safe to post via WebSocket.
-        onAudioChunkRef.current(pcm16.buffer.slice(0));
+        onAudioChunkRef.current(e.data); // Already a transferable copy.
       }
     };
 
-    source.connect(processor);
-    // Connecting to destination prevents garbage-collection in some browsers.
-    processor.connect(audioCtx.destination);
+    source.connect(workletNode);
+    // Connect to destination to prevent garbage-collection in some browsers.
+    workletNode.connect(audioCtx.destination);
 
     isCapturingRef.current = true;
     setIsCapturing(true);

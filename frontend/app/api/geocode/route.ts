@@ -16,7 +16,7 @@
  *   404 — ZERO_RESULTS (remote or ocean coordinates)
  *   400 — missing or invalid parameters
  *   429 — OVER_QUERY_LIMIT
- *   403 — REQUEST_DENIED (key restriction or billing issue)
+ *   403 — REQUEST_DENIED (key has website/referer restrictions — must use None + API restrictions only)
  *   500 — unexpected API error or fetch failure
  *   503 — all providers failed (Google key absent and Nominatim also failed)
  *
@@ -164,10 +164,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   let geoData: GeocodingResponse;
   try {
     const resp = await fetch(url.toString(), {
-      // The API key has an HTTP Referer restriction. Server-side fetch does not
-      // send Referer automatically, so we set it explicitly to satisfy the
-      // allowed referrer configured in Google Cloud Console.
-      headers: { Referer: 'https://wafrivet-field-vet.vercel.app/' },
+      // No Referer header — the key uses API-only restrictions (no website
+      // restriction), so server-side calls are accepted without a referrer.
+      // Do NOT add a Referer header: keys with website restrictions explicitly
+      // reject server-side Geocoding API calls regardless of what is sent.
       // Cache for 5 minutes — GPS accuracy rarely changes within a session.
       next: { revalidate: 300 },
     });
@@ -199,8 +199,14 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
         { status: 429 },
       );
     case 'REQUEST_DENIED':
-      console.error('[/api/geocode] REQUEST_DENIED:', geoData.error_message,
-        '— verify GOOGLE_MAPS_KEY in Vercel env vars and that the HTTP Referer restriction includes wafrivet-field-vet.vercel.app');
+      console.error(
+        '[/api/geocode] REQUEST_DENIED:', geoData.error_message,
+        '— key restriction or billing issue. Falling back to Nominatim.',
+      );
+      {
+        const fallback = await geocodeViaNominatim(lat, lon);
+        if (fallback) return NextResponse.json(fallback);
+      }
       return NextResponse.json(
         { error: 'Geocoding request denied' },
         { status: 403 },
