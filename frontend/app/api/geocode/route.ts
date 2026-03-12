@@ -89,6 +89,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   // result_type filter improves relevance for administrative lookups.
   // Omit it here — we scan all results for administrative_area_level_1.
 
+  console.log(`[/api/geocode] Reverse geocoding lat=${lat}, lon=${lon}`);
+
   let geoData: GeocodingResponse;
   try {
     const resp = await fetch(url.toString(), {
@@ -161,11 +163,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   }
 
   if (!state) {
+    console.warn(`[/api/geocode] No administrative_area_level_1 found for lat=${lat}, lon=${lon}. Google status=${geoData.status}, results=${geoData.results.length}`);
     return NextResponse.json(
       { error: 'Could not determine Nigerian state from these coordinates' },
       { status: 404 },
     );
   }
 
+  console.log(`[/api/geocode] Resolved lat=${lat}, lon=${lon} → state="${state}", lga="${lga}", address="${formattedAddress}"`);
   return NextResponse.json({ state, lga: lga ?? null, formattedAddress });
 }

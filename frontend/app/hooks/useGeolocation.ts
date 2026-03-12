@@ -48,8 +48,12 @@ const GEO_OPTIONS: PositionOptions = {
   enableHighAccuracy: true,
   // Increased to 10 s per Phase 2 spec (was 8 s).
   timeout: 10_000,
-  /** Cache position for 5 minutes — accuracy does not change within a session. */
-  maximumAge: 300_000,
+  /**
+   * Do not use a stale cached position — always request a fresh GPS fix.
+   * A 5-minute cache (the previous value) could serve a stale IP-based
+   * position from a different session, causing wrong-city results (often Lagos).
+   */
+  maximumAge: 0,
 };
 
 const GPS_ERROR_MESSAGES: Readonly<Record<number, string>> = {
@@ -70,6 +74,7 @@ export function useGeolocation(): UseGeolocationReturn {
 
   useEffect(() => {
     if (!navigator.geolocation) {
+      console.warn('[useGeolocation] navigator.geolocation is not available in this browser');
       setHasGPSError(true);
       setErrorMessage(
         'Geolocation is not supported by this browser. Please say your state name.',
@@ -77,11 +82,26 @@ export function useGeolocation(): UseGeolocationReturn {
       return;
     }
 
+    console.log('[useGeolocation] Requesting browser geolocation (enableHighAccuracy=true, timeout=10s, maximumAge=0)…');
     setIsLoading(true);
 
     navigator.geolocation.getCurrentPosition(
       async (position: GeolocationPosition) => {
-        const { latitude, longitude } = position.coords;
+        const { latitude, longitude, accuracy } = position.coords;
+
+        console.log(
+          `[useGeolocation] GPS fix received — lat: ${latitude}, lon: ${longitude}, accuracy: ${accuracy}m`,
+        );
+
+        // Accuracy > 5 km almost always means the browser fell back to IP-based
+        // geolocation (no GPS hardware or no signal). In Nigeria, IP-based
+        // geolocation usually resolves to Lagos. We still proceed, but warn.
+        if (accuracy > 5_000) {
+          console.warn(
+            `[useGeolocation] Low accuracy (${accuracy}m) — browser is likely using IP-based location, not GPS. ` +
+            'This commonly reports Lagos for Nigerian connections regardless of actual location.',
+          );
+        }
 
         // Store raw coordinates immediately — available to FieldVetSession
         // even if the /api/geocode call fails.
@@ -90,6 +110,7 @@ export function useGeolocation(): UseGeolocationReturn {
 
         // Call the server-side proxy; GOOGLE_MAPS_KEY never touches the browser.
         try {
+          console.log(`[useGeolocation] Calling /api/geocode for lat=${latitude}, lon=${longitude}…`);
           const resp = await fetch(
             `/api/geocode?lat=${latitude}&lon=${longitude}`,
           );
@@ -100,18 +121,27 @@ export function useGeolocation(): UseGeolocationReturn {
               lga: string | null;
               formattedAddress: string;
             };
+            console.log(
+              `[useGeolocation] Geocode success — state: "${data.state}", lga: "${data.lga}", address: "${data.formattedAddress}"`,
+            );
             setDetectedState(data.state);
             setLga(data.lga ?? null);
             setFormattedAddress(data.formattedAddress ?? null);
           } else {
             // /api/geocode returned a structured error — GPS still worked.
+            let errBody = '(could not read body)';
+            try { errBody = await resp.text(); } catch { /* ignore */ }
+            console.warn(
+              `[useGeolocation] /api/geocode returned HTTP ${resp.status} — body: ${errBody}`,
+            );
             setHasGPSError(true);
             setErrorMessage(
               'Could not determine your Nigerian state from GPS. ' +
               'Please say your state name.',
             );
           }
-        } catch {
+        } catch (fetchErr) {
+          console.error('[useGeolocation] /api/geocode fetch threw an error:', fetchErr);
           setHasGPSError(true);
           setErrorMessage(
             'Could not reach the geocoding service. Please say your state name.',
@@ -121,6 +151,9 @@ export function useGeolocation(): UseGeolocationReturn {
         setIsLoading(false);
       },
       (err: GeolocationPositionError) => {
+        console.warn(
+          `[useGeolocation] GPS error — code: ${err.code}, message: "${err.message}"`,
+        );
         setIsLoading(false);
         setHasGPSError(true);
         setErrorMessage(
