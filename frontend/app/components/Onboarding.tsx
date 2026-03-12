@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Microphone2, Box, Notification } from 'iconsax-react';
+import { Microphone2, Box, Notification, ArrowLeft2 } from 'iconsax-react';
 import wafrivetLogo from '../assets/Green_Black___White_Modern_Creative_Agency_Typography_Logo-removebg-preview.png';
 
 interface OnboardingProps {
@@ -11,10 +11,11 @@ interface OnboardingProps {
 
 export function Onboarding({ onComplete }: OnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  const [direction, setDirection] = useState<'forward' | 'backward'>('forward');
 
   const steps = [
     {
-      title: 'Welcome to Wafrivet Field Vet',
+      title: 'Welcome to WafriAI',
       description: 'Modernizing veterinary procurement across Africa with 100% genuine supplies.',
       actionText: 'Get Started',
       visual: (
@@ -31,7 +32,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           >
             <Image
               src={wafrivetLogo}
-              alt="Wafrivet Logo"
+              alt="WafriAI Logo"
               fill
               style={{ objectFit: 'contain' }}
               priority
@@ -124,9 +125,17 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
   const handleNext = () => {
     if (currentStep < steps.length - 1) {
+      setDirection('forward');
       setCurrentStep(prev => prev + 1);
     } else {
       onComplete();
+    }
+  };
+
+  const handleBack = () => {
+    if (currentStep > 0) {
+      setDirection('backward');
+      setCurrentStep(prev => prev - 1);
     }
   };
 
@@ -164,7 +173,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
 
       {/* ── Main Content Area (Animated) ──────────────── */}
       <div
-        key={currentStep} // Forces re-mount for simple CSS animation on step change
+        key={currentStep} // Forces re-mount for CSS animation on step change
         style={{
           flex: 1,
           display: 'flex',
@@ -173,7 +182,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
           justifyContent: 'center',
           textAlign: 'center',
           gap: '48px',
-          animation: 'fade-in 0.4s ease-out forwards',
+          animation: `${direction === 'forward' ? 'slide-in-right' : 'slide-in-left'} 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards`,
           width: '100%',
           maxWidth: '400px',
         }}
@@ -206,31 +215,65 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         </div>
       </div>
 
-      {/* ── Action Button ─────────────────────────────── */}
-      <button
-        onClick={handleNext}
+      {/* ── Action Buttons ────────────────────────────── */}
+      <div
         style={{
           width: '100%',
           maxWidth: '400px',
-          background: 'var(--color-primary)', // Sage
-          color: 'var(--color-white)',
-          border: 'none',
-          borderRadius: '16px',
-          padding: '18px 24px',
-          fontSize: '16px',
-          fontWeight: 700,
-          cursor: 'pointer',
-          boxShadow: '0 8px 24px color-mix(in srgb, var(--color-primary) 40%, transparent)',
-          transition: 'transform 0.1s, background 0.2s',
-          WebkitTapHighlightColor: 'transparent',
-          touchAction: 'manipulation',
+          display: 'flex',
+          gap: '12px',
         }}
-        onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
-        onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
-        onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
       >
-        {steps[currentStep].actionText}
-      </button>
+        {currentStep > 0 && (
+          <button
+            onClick={handleBack}
+            style={{
+              width: '60px',
+              height: '60px',
+              background: 'color-mix(in srgb, var(--color-surface-2) 60%, transparent)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '16px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              transition: 'transform 0.1s, background 0.2s',
+              WebkitTapHighlightColor: 'transparent',
+              touchAction: 'manipulation',
+            }}
+            onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.94)')}
+            onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+            aria-label="Previous step"
+          >
+            <ArrowLeft2 size={24} color="var(--color-text)" />
+          </button>
+        )}
+
+        <button
+          onClick={handleNext}
+          style={{
+            flex: 1,
+            background: 'var(--color-primary)', // Sage
+            color: 'var(--color-white)',
+            border: 'none',
+            borderRadius: '16px',
+            padding: '18px 24px',
+            fontSize: '16px',
+            fontWeight: 700,
+            cursor: 'pointer',
+            boxShadow: '0 8px 24px color-mix(in srgb, var(--color-primary) 40%, transparent)',
+            transition: 'transform 0.1s, background 0.2s',
+            WebkitTapHighlightColor: 'transparent',
+            touchAction: 'manipulation',
+          }}
+          onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.97)')}
+          onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          onPointerLeave={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+        >
+          {steps[currentStep].actionText}
+        </button>
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@
 /**
  * app/components/FieldVetSession.tsx
  *
- * Main orchestration shell for Wafrivet Field Vet — Phase 5 Part 4.
+ * Main orchestration shell for WafriAI — Phase 5 Part 4.
  *
  * Layout (all children are position:absolute inside the full-screen <main>):
  *   z=0   CameraView        — fills viewport, rear camera + indicators
@@ -47,6 +47,8 @@ import { CartBadge }        from './CartBadge';
 import { PayButton }        from './PayButton';
 import { InterruptButton }  from './InterruptButton';
 import { PinOverlay }       from './PinOverlay';
+import { MediaControls }    from './MediaControls';
+import { ActionMenu }       from './ActionMenu';
 
 import type { Product } from '@/app/types/events';
 
@@ -151,8 +153,17 @@ export function FieldVetSession() {
   }, [lastError]);
 
   // ── Media pipeline ──────────────────────────────────────────────────────────
-  const { videoRef, canvasRef, isCapturing, permissionError, activateMic } =
-    useMediaPipeline({
+  const { 
+    videoRef, 
+    canvasRef, 
+    isCapturing, 
+    permissionError, 
+    activateMic,
+    isMuted,
+    isCameraPaused,
+    toggleMute,
+    toggleCamera
+  } = useMediaPipeline({
       onAudioChunk: sendAudio,
       onVideoFrame: sendImage,
       framePeriodMs: 1_500,
@@ -196,6 +207,17 @@ export function FieldVetSession() {
     [sendText],
   );
 
+  const handleResetLocation = useCallback(() => {
+    setLocalConfirmedLocation(null);
+    // You might also want to tell the user they can re-detect or re-enter
+  }, []);
+
+  const handleShowCart = useCallback(() => {
+    // Scroll to cart or highlight cart badge
+    // Since CartBadge has its own positioning, we'll just pulse it again
+    setCartVersion(v => v + 1);
+  }, []);
+
   // ── Voice-fallback text input (accessible alternative to mic) ──────────────
   const [textDraft, setTextDraft] = useState('');
   const textInputId = useId();
@@ -235,6 +257,11 @@ export function FieldVetSession() {
   const cartBadgeBottom = payButtonVisible
     ? 'calc(266px + var(--spacing-safe-bottom))'
     : 'calc(180px + var(--spacing-safe-bottom))';
+
+  // MediaControls bottom position — sitting just above the cart badge or pay button area
+  const mediaControlsBottom = payButtonVisible
+    ? 'calc(180px + var(--spacing-safe-bottom))'
+    : 'calc(100px + var(--spacing-safe-bottom))';
 
   return (
     <main
@@ -381,35 +408,21 @@ export function FieldVetSession() {
 
 
 
-      {/* ── Top Right Action Buttons (Notification) ───────────────────────── */}
+      {/* ── Top Right Action Menu (Dropdown) ─────────────────────────────── */}
       <div
         style={{
           position: 'absolute',
           top: 'calc(14px + var(--spacing-safe-top))',
-          right: '16px', // Align with the right edge
+          right: '16px',
           zIndex: 65,
         }}
       >
-        <button
-          onClick={() => setShowErrorLog(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: errorLog.length > 0 ? 'color-mix(in srgb, var(--color-error) 22%, transparent)' : 'color-mix(in srgb, var(--color-surface-2) 60%, transparent)',
-            border: `1px solid ${errorLog.length > 0 ? 'var(--color-error)' : 'var(--color-border)'}`,
-            backdropFilter: 'blur(8px)',
-            pointerEvents: 'auto',
-            transition: 'background 0.2s',
-            cursor: 'pointer',
-          }}
-          aria-label="View error log"
-        >
-          <Notification variant="Linear" color={errorLog.length > 0 ? 'var(--color-error)' : 'var(--color-white)'} size={24} />
-        </button>
+        <ActionMenu
+          onShowNotifications={() => setShowErrorLog(true)}
+          onResetLocation={handleResetLocation}
+          onShowCart={handleShowCart}
+          hasNotifications={errorLog.length > 0}
+        />
       </div>
 
       {/* ── Error Log Panel ─────────────────────────────────────────────── */}
@@ -545,6 +558,24 @@ export function FieldVetSession() {
           />
         </div>
       )}
+
+      {/* ── Media Controls — bottom-right (z=35) ─────────────────────────── */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: mediaControlsBottom,
+          right: '16px',
+          zIndex: 35,
+        }}
+      >
+        <MediaControls
+          isMuted={isMuted}
+          isCameraPaused={isCameraPaused}
+          onToggleMute={toggleMute}
+          onToggleCamera={toggleCamera}
+          isVisible={isCapturing}
+        />
+      </div>
 
       {/* ── Pay button — full-width at bottom (z=45) ─────────────────────── */}
       {payButtonVisible && (

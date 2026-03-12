@@ -26,15 +26,15 @@ const mono = JetBrains_Mono({ subsets: ['latin'], variable: '--font-mono' });
 // ── Document metadata ─────────────────────────────────────────────────────────
 
 export const metadata: Metadata = {
-  title: 'Wafrivet Field Vet — AI Livestock Assistant',
+  title: 'WafriAI — AI Livestock Assistant',
   description:
     'Real-time multimodal AI veterinary assistant for West African livestock farmers. ' +
     'Talk to the AI, show your animal on camera, get instant diagnosis and treatment.',
-  applicationName: 'Wafrivet Field Vet',
+  applicationName: 'WafriAI',
   icons: { icon: '/icon.png' },
   // Open Graph for sharing
   openGraph: {
-    title: 'Wafrivet Field Vet',
+    title: 'WafriAI',
     description: 'AI-powered vet for West African livestock farmers.',
     type: 'website',
   },

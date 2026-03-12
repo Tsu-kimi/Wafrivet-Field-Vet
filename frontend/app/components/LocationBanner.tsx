@@ -46,20 +46,16 @@ export function LocationBanner({
   const inputId = useId();
 
   // ── Confirmed pill & Globe Link ───────────────────────────────────────────
+  // ── Confirmed pill (Floating banner removed; now handled by ActionMenu) ─────
   if (confirmedLocation) {
     return (
       <div style={{
         position: 'absolute',
         top: 'calc(14px + var(--spacing-safe-top))',
         left: '16px',
-        right: '16px',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'flex-start', // Align to top to allow individual top-offsets if needed
         zIndex: 55,
-        pointerEvents: 'none', // Allow clicks to pass through the container
+        pointerEvents: 'none',
       }}>
-        {/* Left Side: Location Pill */}
         <div
           role="status"
           aria-live="polite"
@@ -73,7 +69,7 @@ export function LocationBanner({
             gap: '6px',
             animation: 'fade-in 0.4s ease',
             backdropFilter: 'blur(8px)',
-            pointerEvents: 'auto', // Re-enable clicks for the pill itself
+            pointerEvents: 'auto',
           }}
         >
           <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -89,30 +85,6 @@ export function LocationBanner({
             {confirmedLocation}
           </span>
         </div>
-
-        {/* Right Side: Website Link */}
-        <a
-          href="https://wafrivet.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            background: 'color-mix(in srgb, var(--color-surface-2) 60%, transparent)',
-            border: '1px solid var(--color-border)',
-            backdropFilter: 'blur(8px)',
-            pointerEvents: 'auto', // Re-enable clicks for the link
-            transition: 'background 0.2s',
-            marginTop: '50px', // Below the notification icon (40px icon + 10px gap)
-          }}
-          aria-label="Visit Wafrivet website"
-        >
-          <Global variant="Linear" color="var(--color-white)" size={24} />
-        </a>
       </div>
     );
   }

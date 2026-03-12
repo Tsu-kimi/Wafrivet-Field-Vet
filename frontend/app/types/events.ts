@@ -1,8 +1,7 @@
 /**
  * app/types/events.ts
  *
- * TypeScript interfaces for every WebSocket message type in the
- * Wafrivet Field Vet Live streaming protocol (Phase 5 contract).
+ * WafriAI Live streaming protocol (Phase 5 contract).
  *
  * Source of truth: backend/streaming/events.py
  * WebSocket endpoint: /ws/{user_id}/{session_id}
@@ -156,7 +155,7 @@ export interface AudioFlushEvent {
 export interface TranscriptionEvent {
   type: 'TRANSCRIPTION';
   text: string;
-  /** "user" | agent name (e.g. "Wafrivet Field Vet") */
+  /** "user" | agent name (e.g. "WafriAI") */
   author: string;
   is_final: boolean;
 }

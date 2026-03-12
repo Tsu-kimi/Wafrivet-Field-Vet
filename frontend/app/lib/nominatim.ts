@@ -16,7 +16,7 @@ const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/reverse';
 
 // Nominatim requires a User-Agent identifying the application.
 // Use a descriptive string per the usage policy.
-const USER_AGENT = 'WafrivetFieldVet/1.0 (+https://github.com/Tsu-kimi/Wafrivet-Field-Vet)';
+const USER_AGENT = 'WafriAI/1.0 (+https://github.com/Tsu-kimi/Wafrivet-Field-Vet)';
 
 interface NominatimAddress {
   state?: string;

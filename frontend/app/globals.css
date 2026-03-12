@@ -6,7 +6,7 @@
 }
 
 :root {
-  /* Wafrivet Brand Palette */
+  /* WafriAI Brand Palette */
   --color-sage:         #6B7D56;
   --color-sage-dark:    #5A6A48;
   --color-bone:         #D9E0D0;
@@ -116,8 +116,33 @@ button {
   to   { opacity: 1; }
 }
 
+@keyframes slide-in-right {
+  from { transform: translateX(30px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+@keyframes slide-in-left {
+  from { transform: translateX(-30px); opacity: 0; }
+  to   { transform: translateX(0);     opacity: 1; }
+}
+
+@keyframes slide-out-right {
+  from { transform: translateX(0);    opacity: 1; }
+  to   { transform: translateX(30px); opacity: 0; }
+}
+
+@keyframes slide-out-left {
+  from { transform: translateX(0);     opacity: 1; }
+  to   { transform: translateX(-30px); opacity: 0; }
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+@keyframes menu-slide-down {
+  0% { transform: translateY(-20px) scale(0.95); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
 }
 
 /* Hide scrollbar for product row */

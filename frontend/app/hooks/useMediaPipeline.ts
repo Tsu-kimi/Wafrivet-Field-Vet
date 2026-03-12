@@ -66,6 +66,14 @@ export interface UseMediaPipelineReturn {
    * Calls AudioContext.resume() internally while inside a user gesture.
    */
   activateMic: () => Promise<void>;
+  /** Mute status for the microphone. */
+  isMuted: boolean;
+  /** Pause status for the camera. */
+  isCameraPaused: boolean;
+  /** Toggle the muted state. */
+  toggleMute: () => void;
+  /** Toggle the camera pause state. */
+  toggleCamera: () => void;
 }
 
 // ── Utility ───────────────────────────────────────────────────────────────────
@@ -90,6 +98,8 @@ export function useMediaPipeline({
 }: UseMediaPipelineOptions): UseMediaPipelineReturn {
   const [isCapturing,    setIsCapturing]    = useState(false);
   const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [isMuted, setIsMuted] = useState(false);
+  const [isCameraPaused, setIsCameraPaused] = useState(false);
 
   // Exposed to the caller for DOM wiring.
   const videoRef  = useRef<HTMLVideoElement | null>(null);
@@ -112,6 +122,11 @@ export function useMediaPipeline({
   onAudioChunkRef.current = onAudioChunk;
   onVideoFrameRef.current = onVideoFrame;
 
+  const isMutedRef = useRef(isMuted);
+  const isCameraPausedRef = useRef(isCameraPaused);
+  isMutedRef.current = isMuted;
+  isCameraPausedRef.current = isCameraPaused;
+
   // ── Mandatory cleanup: kill camera LED on unmount ─────────────────────────
   useEffect(() => {
     return () => {
@@ -128,6 +143,15 @@ export function useMediaPipeline({
       }
     };
   }, []); // Runs cleanup exactly once on unmount.
+
+  // ── Toggle handlers ──────────────────────────────────────────────────────
+  const toggleMute = useCallback(() => {
+    setIsMuted(prev => !prev);
+  }, []);
+
+  const toggleCamera = useCallback(() => {
+    setIsCameraPaused(prev => !prev);
+  }, []);
 
   // ── activateMic ───────────────────────────────────────────────────────────
   const activateMic = useCallback(async () => {
@@ -181,7 +205,7 @@ export function useMediaPipeline({
       const canvas = canvasRef.current;
       if (
         !video  || video.readyState < HTMLMediaElement.HAVE_ENOUGH_DATA ||
-        !canvas || !ctx2d
+        !canvas || !ctx2d || isCameraPausedRef.current
       ) return;
 
       ctx2d.drawImage(video, 0, 0, 640, 480);
@@ -241,8 +265,12 @@ export function useMediaPipeline({
         const s  = Math.max(-1, Math.min(1, samples[i]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
       }
-      // .slice() produces a transferable copy safe to post via WebSocket.
-      onAudioChunkRef.current(pcm16.buffer.slice(0));
+
+      // Skip sending if muted
+      if (!isMutedRef.current) {
+        // .slice() produces a transferable copy safe to post via WebSocket.
+        onAudioChunkRef.current(pcm16.buffer.slice(0));
+      }
     };
 
     source.connect(processor);
@@ -253,5 +281,15 @@ export function useMediaPipeline({
     setIsCapturing(true);
   }, [framePeriodMs]);
 
-  return { videoRef, canvasRef, isCapturing, permissionError, activateMic };
+  return { 
+    videoRef, 
+    canvasRef, 
+    isCapturing, 
+    permissionError, 
+    activateMic,
+    isMuted,
+    isCameraPaused,
+    toggleMute,
+    toggleCamera
+  };
 }
