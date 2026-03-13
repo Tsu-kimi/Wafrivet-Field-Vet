@@ -375,6 +375,8 @@ export function FieldVetSession() {
           onResetLocation={handleResetLocation}
           onShowCart={handleShowCart}
           hasNotifications={errorLog.length > 0}
+          cartCount={cartItems.length}
+          cartTotal={cartTotal}
         />
       </div>
 
@@ -493,24 +495,6 @@ export function FieldVetSession() {
         </div>
       )}
 
-      {/* ── Cart badge — floating, bottom-right (z=38) ───────────────────── */}
-      {cartItems.length > 0 && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: cartBadgeBottom,
-            right: '16px',
-            zIndex: 38,
-            animation: 'fade-in 0.3s ease',
-          }}
-        >
-          <CartBadge
-            itemCount={cartItems.length}
-            total={cartTotal}
-            updateVersion={cartVersion}
-          />
-        </div>
-      )}
 
       {/* ── Media Controls — bottom-right (z=35) ─────────────────────────── */}
       <div

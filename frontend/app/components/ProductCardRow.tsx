@@ -50,7 +50,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
       aria-pressed={isActive}
       aria-label={`${product.name}, ₦${(product.price ?? product.base_price).toLocaleString('en-NG')}${isActive ? ', selected' : ''}`}
       style={{
-        flex: '0 0 160px',
+        flex: '0 0 240px',
         borderRadius: '16px',
         overflow: 'hidden',
         background: isActive ? 'var(--color-surface)' : 'var(--color-bg)',
@@ -82,7 +82,7 @@ function ProductCard({ product, isActive, onTap, onAdd }: ProductCardProps) {
             src={product.image_url}
             alt={product.name}
             fill
-            sizes="160px"
+            sizes="240px"
             style={{ objectFit: 'cover' }}
             priority={false}
           />

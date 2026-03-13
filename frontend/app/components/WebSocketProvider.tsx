@@ -117,12 +117,30 @@ interface SessionIds {
   sessionId: string;
 }
 
-/** Read existing IDs from sessionStorage or create new ones. */
+/** Read existing IDs from localStorage/sessionStorage or create new ones. */
 function getOrCreateIds(): SessionIds {
-  const userId    = sessionStorage.getItem(KEY_USER_ID)    ?? generateId();
+  // If AuthScreen has set a phone number, use that as the stable userId.
+  const storedIdentity = localStorage.getItem('wafrivet_user_identity');
+  let userId = '';
+  
+  if (storedIdentity) {
+    try {
+      const { phoneNumber } = JSON.parse(storedIdentity);
+      userId = phoneNumber.replace(/\+/g, '');
+    } catch (e) {
+      // fallback
+    }
+  }
+
+  if (!userId) {
+    userId = sessionStorage.getItem(KEY_USER_ID) ?? generateId();
+  }
+  
   const sessionId = sessionStorage.getItem(KEY_SESSION_ID) ?? generateId();
+  
   sessionStorage.setItem(KEY_USER_ID,    userId);
   sessionStorage.setItem(KEY_SESSION_ID, sessionId);
+  
   return { userId, sessionId };
 }
 

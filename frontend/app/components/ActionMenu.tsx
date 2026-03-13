@@ -15,6 +15,8 @@ interface ActionMenuProps {
   onResetLocation: () => void;
   onShowCart: () => void;
   hasNotifications: boolean;
+  cartCount: number;
+  cartTotal: number;
 }
 
 export function ActionMenu({
@@ -22,6 +24,8 @@ export function ActionMenu({
   onResetLocation,
   onShowCart,
   hasNotifications,
+  cartCount,
+  cartTotal,
 }: ActionMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -73,21 +77,47 @@ export function ActionMenu({
         onClick={toggleMenu}
         style={{
           ...triggerButtonStyle,
-          background: hasNotifications && !isOpen 
+          background: (hasNotifications && !isOpen) || (cartCount > 0 && !isOpen)
             ? 'color-mix(in srgb, var(--color-error) 22%, transparent)' 
             : triggerButtonStyle.background,
-          border: hasNotifications && !isOpen ? '1px solid var(--color-error)' : triggerButtonStyle.border,
+          border: (hasNotifications && !isOpen) || (cartCount > 0 && !isOpen) 
+            ? '1px solid var(--color-error)' 
+            : triggerButtonStyle.border,
           transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)',
           zIndex: 100,
+          position: 'relative',
         }}
-        aria-label="Toggle action menu"
+        aria-label={`Toggle action menu${cartCount > 0 ? `, ${cartCount} items in cart` : ''}`}
         aria-expanded={isOpen}
       >
         <ArrowDown2 
           variant="Linear" 
-          color={hasNotifications && !isOpen ? 'var(--color-error)' : 'var(--color-white)'} 
+          color={(hasNotifications && !isOpen) || (cartCount > 0 && !isOpen) ? 'var(--color-error)' : 'var(--color-white)'} 
           size={24} 
         />
+        {cartCount > 0 && !isOpen && (
+          <span
+            style={{
+              position: 'absolute',
+              top: '-4px',
+              right: '-4px',
+              background: 'var(--color-error)',
+              color: 'var(--color-white)',
+              fontSize: '10px',
+              fontWeight: 800,
+              width: '18px',
+              height: '18px',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px solid var(--color-surface-2)',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+            }}
+          >
+            {cartCount}
+          </span>
+        )}
       </button>
 
       {/* Dropdown Items */}
@@ -144,10 +174,34 @@ export function ActionMenu({
               ...baseItemStyle,
               animation: 'menu-slide-down 0.3s cubic-bezier(0.22, 1, 0.36, 1) both',
               animationDelay: '0.15s',
+              position: 'relative',
             }}
-            aria-label="Go to cart"
+            aria-label={`Go to cart, ${cartCount} items, total ₦${cartTotal.toLocaleString('en-NG')}`}
           >
             <ShoppingCart variant="Linear" color="var(--color-white)" size={24} />
+            {cartCount > 0 && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: '6px',
+                  right: '6px',
+                  background: 'var(--color-primary)',
+                  color: 'var(--color-white)',
+                  fontSize: '9px',
+                  fontWeight: 800,
+                  width: '16px',
+                  height: '16px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  border: '1.5px solid var(--color-surface)',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                }}
+              >
+                {cartCount}
+              </span>
+            )}
           </button>
 
           {/* Location Icon */}

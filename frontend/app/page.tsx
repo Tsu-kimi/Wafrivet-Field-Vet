@@ -9,31 +9,51 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { Onboarding } from './components/Onboarding';
+import { AuthScreen } from './components/AuthScreen';
 import { WebSocketProvider } from './components/WebSocketProvider';
 import { FieldVetSession } from './components/FieldVetSession';
-import { Onboarding } from './components/Onboarding';
-
 const ONBOARDED_KEY = 'wafrivet_onboarded';
+const USER_IDENTITY_KEY = 'wafrivet_user_identity';
 
 export default function Home() {
-  // null = unknown (SSR / before hydration), true = show, false = skip
-  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
+  // 'onboarding' | 'auth' | 'session' | null
+  const [step, setStep] = useState<'onboarding' | 'auth' | 'session' | null>(null);
 
   useEffect(() => {
     const alreadyOnboarded = localStorage.getItem(ONBOARDED_KEY) === '1';
-    setShowOnboarding(!alreadyOnboarded);
+    const userIdentity = localStorage.getItem(USER_IDENTITY_KEY);
+
+    if (!alreadyOnboarded) {
+      setStep('onboarding');
+    } else if (!userIdentity) {
+      setStep('auth');
+    } else {
+      setStep('session');
+    }
   }, []);
 
-  const handleComplete = () => {
+  const handleOnboardingComplete = () => {
     localStorage.setItem(ONBOARDED_KEY, '1');
-    setShowOnboarding(false);
+    setStep('auth');
   };
 
-  // Hold rendering until localStorage has been read to avoid a flash.
-  if (showOnboarding === null) return null;
+  const handleAuthComplete = (identity: { phoneNumber: string; name: string }) => {
+    localStorage.setItem(USER_IDENTITY_KEY, JSON.stringify(identity));
+    // Also set the stable user_id to the phone number for the WebSocketProvider
+    sessionStorage.setItem('wafrivet_user_id', identity.phoneNumber.replace(/\+/g, ''));
+    setStep('session');
+  };
 
-  if (showOnboarding) {
-    return <Onboarding onComplete={handleComplete} />;
+  // Hold rendering until localStorage has been read
+  if (step === null) return null;
+
+  if (step === 'onboarding') {
+    return <Onboarding onComplete={handleOnboardingComplete} />;
+  }
+
+  if (step === 'auth') {
+    return <AuthScreen onComplete={handleAuthComplete} />;
   }
 
   return (
