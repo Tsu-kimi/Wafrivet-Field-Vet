@@ -54,6 +54,8 @@ export const viewport: Viewport = {
   themeColor: '#D9E0D0', // Bone
 };
 
+import { OnboardingGuard } from './components/OnboardingGuard';
+
 // ── Root layout (Server Component) ────────────────────────────────────────────
 
 export default function RootLayout({
@@ -62,7 +64,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${inter.variable} ${fraunces.variable} ${mono.variable}`}>
       <body>
-        {children}
+        <OnboardingGuard>
+          {children}
+        </OnboardingGuard>
       </body>
     </html>
   );

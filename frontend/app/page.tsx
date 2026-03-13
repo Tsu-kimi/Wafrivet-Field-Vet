@@ -15,38 +15,34 @@ import { AuthScreen } from './components/AuthScreen';
 import { WebSocketProvider } from './components/WebSocketProvider';
 import { FieldVetSession } from './components/FieldVetSession';
 
-const ONBOARDED_KEY = 'wafrivet_onboarded';
+const ONBOARDED_KEY = 'wafrivet_onboarded_v3';
 const USER_IDENTITY_KEY = 'wafrivet_user_identity';
 const FARMER_KEY = 'wafrivet_farmer';
 
 export default function Home() {
   const router = useRouter();
   // 'onboarding' | 'auth' | 'session' | null
+  const [mounted, setMounted] = useState(false);
   const [step, setStep] = useState<'onboarding' | 'auth' | 'session' | null>(null);
 
   useEffect(() => {
+    setMounted(true);
+    
     // Guard: require login before allowing access.
     const farmer = localStorage.getItem(FARMER_KEY);
     if (!farmer) {
       router.replace('/login');
       return;
     }
-    const alreadyOnboarded = localStorage.getItem(ONBOARDED_KEY) === '1';
+    
     const userIdentity = localStorage.getItem(USER_IDENTITY_KEY);
 
-    if (!alreadyOnboarded) {
-      setStep('onboarding');
-    } else if (!userIdentity) {
+    if (!userIdentity) {
       setStep('auth');
     } else {
       setStep('session');
     }
-  }, []);
-
-  const handleOnboardingComplete = () => {
-    localStorage.setItem(ONBOARDED_KEY, '1');
-    setStep('auth');
-  };
+  }, [router]);
 
   const handleAuthComplete = (identity: { phoneNumber: string; name: string }) => {
     localStorage.setItem(USER_IDENTITY_KEY, JSON.stringify(identity));
@@ -55,12 +51,8 @@ export default function Home() {
     setStep('session');
   };
 
-  // Hold rendering until localStorage has been read
-  if (step === null) return null;
-
-  if (step === 'onboarding') {
-    return <Onboarding onComplete={handleOnboardingComplete} />;
-  }
+  // Hold rendering until mounted and localStorage has been read
+  if (!mounted || step === null) return null;
 
   if (step === 'auth') {
     return <AuthScreen onComplete={handleAuthComplete} />;

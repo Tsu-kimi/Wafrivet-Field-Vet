@@ -158,11 +158,15 @@ export default function LoginPage() {
   const [error, setError]             = useState<string | null>(null);
   const [loading, setLoading]         = useState(false);
 
-  // Redirect already-logged-in farmers straight to the session page.
+  const [ready, setReady]             = useState(false);
+
+  // Redirect already-logged-in farmers straight to the session page (at root).
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(FARMER_KEY);
-      if (stored) router.replace('/');
+    const stored = localStorage.getItem(FARMER_KEY);
+    if (stored) {
+      router.replace('/');
+    } else {
+      setReady(true);
     }
   }, [router]);
 
@@ -331,324 +335,340 @@ export default function LoginPage() {
     }
   };
 
-  // ── Shared styles ─────────────────────────────────────────────────────────
-
-  const containerStyle: React.CSSProperties = {
-    minHeight: '100svh',
-    background: 'var(--color-bg)',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '24px 20px',
-    overflowY: 'auto',
-  };
-
-  const cardStyle: React.CSSProperties = {
-    width: '100%',
-    maxWidth: '360px',
-    background: 'var(--color-surface-2)',
-    borderRadius: '20px',
-    padding: '32px 24px',
-    boxShadow: '0 4px 24px rgba(58,68,46,0.10)',
-  };
-
-  const logoStyle: React.CSSProperties = {
-    fontSize: '28px',
-    fontWeight: 800,
-    color: 'var(--color-primary)',
-    letterSpacing: '-0.5px',
-    marginBottom: '4px',
-    textAlign: 'center',
-  };
-
-  const subtitleStyle: React.CSSProperties = {
-    fontSize: '13px',
-    color: 'var(--color-text-muted)',
-    textAlign: 'center',
-    marginBottom: '28px',
-  };
-
-  const labelStyle: React.CSSProperties = {
-    fontSize: '13px',
-    fontWeight: 600,
-    color: 'var(--color-text)',
-    marginBottom: '6px',
-    display: 'block',
-  };
-
-  const inputStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '13px 14px',
-    borderRadius: '10px',
-    border: '1.5px solid var(--color-border)',
-    background: 'var(--color-surface)',
-    fontSize: '16px',
-    color: 'var(--color-text)',
-    outline: 'none',
-    transition: 'border-color 0.15s',
-  };
-
-  const btnStyle: React.CSSProperties = {
-    width: '100%',
-    padding: '14px',
-    borderRadius: '12px',
-    border: 'none',
-    background: 'var(--color-primary)',
-    color: 'var(--color-white)',
-    fontSize: '16px',
-    fontWeight: 700,
-    marginTop: '20px',
-    cursor: loading ? 'not-allowed' : 'pointer',
-    opacity: loading ? 0.7 : 1,
-    transition: 'opacity 0.15s, background 0.15s',
-  };
-
-  const errorStyle: React.CSSProperties = {
-    marginTop: '12px',
-    padding: '10px 12px',
-    borderRadius: '8px',
-    background: 'color-mix(in srgb, var(--color-error) 12%, transparent)',
-    color: 'var(--color-error)',
-    fontSize: '13px',
-    fontWeight: 500,
-  };
-
-  const linkStyle: React.CSSProperties = {
-    fontSize: '13px',
-    color: 'var(--color-primary)',
-    textDecoration: 'underline',
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 0,
-    marginTop: '16px',
-    display: 'block',
-    textAlign: 'center',
-  };
-
-  const backLabel: React.CSSProperties = {
-    fontSize: '13px',
-    color: 'var(--color-text-muted)',
-    textDecoration: 'none',
-    display: 'block',
-    textAlign: 'center',
-    marginTop: '12px',
-    cursor: 'pointer',
-    background: 'none',
-    border: 'none',
-    padding: 0,
-  };
+  if (!ready) return null;
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const tabs = [
+    { id: 'login', label: 'Sign In' },
+    { id: 'register', label: 'Register' },
+  ];
 
   return (
-    <div style={containerStyle}>
-      <div style={cardStyle}>
-        {/* Logo */}
-        <div style={logoStyle}>WafriAI</div>
-        <p style={subtitleStyle}>Your intelligent farm assistant</p>
+    <main
+      style={{
+        minHeight: '100svh',
+        background: 'var(--color-bg)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        fontFamily: 'var(--font-inter)',
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '400px',
+          background: 'var(--color-white)',
+          borderRadius: '32px',
+          padding: '40px 32px',
+          boxShadow: '0 20px 60px rgba(58, 68, 46, 0.08)',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '32px',
+          animation: 'fade-in 0.6s ease-out',
+        }}
+      >
+        {/* Header */}
+        <div style={{ textAlign: 'center' }}>
+          <div
+            style={{
+              fontFamily: 'var(--font-fraunces)',
+              fontSize: '32px',
+              fontWeight: 800,
+              color: 'var(--color-primary)',
+              letterSpacing: '-1px',
+              marginBottom: '8px',
+            }}
+          >
+            WafriAI
+          </div>
+          <p style={{ fontSize: '15px', color: 'var(--color-text-muted)', margin: 0 }}>
+            {step === 'phone'
+              ? (mode === 'login' ? 'Welcome back! Sign in to continue.' : 'Create an account to get started.')
+              : 'Secure your account'}
+          </p>
+        </div>
 
         {/* ── Step 1: Phone ──────────────────────────────────────────────── */}
         {step === 'phone' && (
-          <>
-            {/* Login / Register tab switcher */}
-            <div style={{
-              display: 'flex',
-              background: 'var(--color-surface)',
-              borderRadius: '10px',
-              padding: '4px',
-              marginBottom: '24px',
-              gap: '4px',
-            }}>
-              {(['login', 'register'] as Mode[]).map((m) => (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {/* Tab Switched */}
+            <div
+              style={{
+                display: 'flex',
+                background: 'var(--color-bone-light)',
+                padding: '6px',
+                borderRadius: '16px',
+                gap: '4px',
+              }}
+            >
+              {tabs.map((tab) => (
                 <button
-                  key={m}
-                  onClick={() => { setMode(m); clearError(); }}
+                  key={tab.id}
+                  onClick={() => {
+                    setMode(tab.id as Mode);
+                    clearError();
+                  }}
                   style={{
                     flex: 1,
-                    padding: '10px',
-                    borderRadius: '8px',
+                    padding: '12px',
+                    borderRadius: '12px',
                     border: 'none',
-                    background: mode === m ? 'var(--color-primary)' : 'transparent',
-                    color: mode === m ? 'var(--color-white)' : 'var(--color-text-muted)',
-                    fontWeight: mode === m ? 700 : 500,
+                    background: mode === tab.id ? 'var(--color-primary)' : 'transparent',
+                    color: mode === tab.id ? 'var(--color-white)' : 'var(--color-text-muted)',
                     fontSize: '14px',
-                    cursor: 'pointer',
-                    transition: 'background 0.2s, color 0.2s',
+                    fontWeight: mode === tab.id ? 700 : 500,
+                    transition: 'all 0.2s ease',
                   }}
                 >
-                  {m === 'login' ? 'Sign In' : 'Register'}
+                  {tab.label}
                 </button>
               ))}
             </div>
-            <label style={labelStyle} htmlFor="phone">Phone number</label>
-            <input
-              id="phone"
-              type="tel"
-              inputMode="tel"
-              autoComplete="tel"
-              autoFocus
-              placeholder="0801 234 5678"
-              value={phone}
-              onChange={(e) => { setPhone(e.target.value); clearError(); }}
-              onKeyDown={(e) => e.key === 'Enter' && handlePhoneSubmit()}
-              style={inputStyle}
-            />
-            {error && <div role="alert" style={errorStyle}>{error}</div>}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label
+                htmlFor="phone"
+                style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)', marginLeft: '4px' }}
+              >
+                Phone Number
+              </label>
+              <input
+                id="phone"
+                type="tel"
+                inputMode="tel"
+                placeholder="0801 234 5678"
+                autoFocus
+                value={phone}
+                onChange={(e) => {
+                  setPhone(e.target.value);
+                  clearError();
+                }}
+                onKeyDown={(e) => e.key === 'Enter' && handlePhoneSubmit()}
+                style={{
+                  width: '100%',
+                  padding: '16px 20px',
+                  borderRadius: '16px',
+                  border: '2px solid var(--color-bone)',
+                  background: 'var(--color-bone-light)',
+                  fontSize: '16px',
+                  color: 'var(--color-text)',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+              />
+            </div>
+
+            {error && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  background: 'color-mix(in srgb, var(--color-error) 10%, white)',
+                  color: 'var(--color-error)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)',
+                }}
+              >
+                {error}
+              </div>
+            )}
+
             <button
-              style={btnStyle}
               onClick={handlePhoneSubmit}
               disabled={loading || phone.trim().length < 10}
+              style={{
+                width: '100%',
+                padding: '18px',
+                borderRadius: '16px',
+                border: 'none',
+                background: 'var(--color-primary)',
+                color: 'var(--color-white)',
+                fontSize: '16px',
+                fontWeight: 700,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                opacity: loading ? 0.7 : 1,
+                boxShadow: '0 8px 24px color-mix(in srgb, var(--color-primary) 30%, transparent)',
+                transition: 'all 0.2s',
+              }}
             >
-              {mode === 'register' ? 'Create Account' : 'Continue'}
+              {loading ? 'Processing...' : mode === 'register' ? 'Create Account' : 'Continue'}
             </button>
-          </>
+          </div>
         )}
 
-        {/* ── Step 2: PIN login ──────────────────────────────────────────── */}
-        {step === 'pin' && (
-          <>
-            <p style={{ ...subtitleStyle, marginBottom: '6px', color: 'var(--color-text)' }}>
-              Enter PIN for
-            </p>
-            <p style={{ ...subtitleStyle, fontWeight: 700, fontSize: '15px' }}>
-              {maskPhone(phoneE164)}
-            </p>
-            <PinInput value={pin} onChange={setPin} disabled={loading} autoFocus />
-            {error && <div role="alert" style={errorStyle}>{error}</div>}
-            {loading && (
-              <p style={{ textAlign: 'center', marginTop: '12px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
-                Signing in…
+        {/* ── Step 2: PIN ────────────────────────────────────────────────── */}
+        {(step === 'pin' || step === 'pin_setup') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', textAlign: 'center' }}>
+            <div>
+              <p style={{ fontSize: '15px', color: 'var(--color-text)', marginBottom: '4px' }}>
+                {step === 'pin' ? 'Enter PIN for' : 'Create a 6-digit PIN for'}
               </p>
-            )}
-            <button
-              style={linkStyle}
-              onClick={() => { setStep('otp_request'); clearError(); }}
-            >
-              Forgot PIN?
-            </button>
-            <button
-              style={backLabel}
-              onClick={() => { setStep('phone'); setPin(''); clearError(); }}
-            >
-              ← Back
-            </button>
-          </>
-        )}
+              <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-primary)', margin: 0 }}>
+                {maskPhone(phoneE164)}
+              </p>
+            </div>
 
-        {/* ── Step 2b: PIN setup (first time / register) ────────────────── */}
-        {step === 'pin_setup' && (
-          <>
-            <p style={{ ...subtitleStyle, color: 'var(--color-text)', marginBottom: '20px' }}>
-              {mode === 'register'
-                ? `Create a 6-digit PIN for ${maskPhone(phoneE164)}.`
-                : 'Welcome! Create a 6-digit PIN to secure your account.'}
-            </p>
-            <p style={{ ...labelStyle, textAlign: 'center', marginBottom: '10px' }}>Create PIN</p>
-            <PinInput value={pin} onChange={setPin} disabled={loading || pin.length === 6} autoFocus />
-            {pin.length === 6 && (
-              <>
-                <p style={{ ...labelStyle, textAlign: 'center', marginTop: '20px', marginBottom: '10px' }}>
-                  Confirm PIN
+            <div style={{ margin: '8px 0' }}>
+              <PinInput value={pin} onChange={setPin} disabled={loading} autoFocus />
+            </div>
+
+            {step === 'pin_setup' && pin.length === 6 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text-muted)', marginBottom: '4px' }}>
+                  Confirm your PIN
                 </p>
                 <PinInput value={pinConfirm} onChange={setPinConfirm} disabled={loading} autoFocus />
-              </>
+              </div>
             )}
-            {error && <div role="alert" style={errorStyle}>{error}</div>}
-            {loading && (
-              <p style={{ textAlign: 'center', marginTop: '12px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
-                Saving PIN…
-              </p>
-            )}
-            <button
-              style={backLabel}
-              onClick={() => { setStep('phone'); setPin(''); setPinConfirm(''); clearError(); }}
-            >
-              ← Back
-            </button>
-            {mode === 'register' && (
-              <button
-                style={{ ...linkStyle, marginTop: '8px' }}
-                onClick={() => { setMode('login'); setStep('phone'); setPin(''); setPinConfirm(''); clearError(); }}
+
+            {error && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  background: 'color-mix(in srgb, var(--color-error) 10%, white)',
+                  color: 'var(--color-error)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)',
+                }}
               >
-                Already have an account? Sign in
-              </button>
+                {error}
+              </div>
             )}
-          </>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              {step === 'pin' && (
+                <button
+                  onClick={() => {
+                    setStep('otp_request');
+                    clearError();
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: 'var(--color-primary)',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                  }}
+                >
+                  Forgot PIN?
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  setStep('phone');
+                  setPin('');
+                  setPinConfirm('');
+                  clearError();
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted)',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                  marginTop: '8px',
+                }}
+              >
+                ← Use a different number
+              </button>
+            </div>
+          </div>
         )}
 
-        {/* ── Step 3a: OTP request (forgot PIN) ─────────────────────────── */}
-        {step === 'otp_request' && (
-          <>
-            <p style={{ ...subtitleStyle, color: 'var(--color-text)', marginBottom: '20px' }}>
-              We'll send a one-time code to {maskPhone(phoneE164)} to reset your PIN.
+        {/* ── Step 3: OTP ────────────────────────────────────────────────── */}
+        {(step === 'otp_request' || step === 'otp_verify') && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', textAlign: 'center' }}>
+            <p style={{ fontSize: '15px', color: 'var(--color-text-muted)', lineHeight: 1.5 }}>
+              {step === 'otp_request'
+                ? `We'll send a one-time code to ${maskPhone(phoneE164)} to reset your PIN.`
+                : `Enter the 6-digit code sent to ${maskPhone(phoneE164)}.`}
             </p>
-            {error && <div role="alert" style={errorStyle}>{error}</div>}
-            <button
-              style={btnStyle}
-              onClick={handleOtpRequest}
-              disabled={loading}
-            >
-              {loading ? 'Sending…' : 'Send OTP'}
-            </button>
-            <button
-              style={backLabel}
-              onClick={() => { setStep('pin'); clearError(); }}
-            >
-              ← Back
-            </button>
-          </>
-        )}
 
-        {/* ── Step 3b: OTP verify + new PIN ─────────────────────────────── */}
-        {step === 'otp_verify' && (
-          <>
-            <p style={{ ...subtitleStyle, color: 'var(--color-text)', marginBottom: '4px' }}>
-              Enter the 6-digit OTP sent to {maskPhone(phoneE164)}.
-            </p>
-            <p style={{ ...labelStyle, textAlign: 'center', marginBottom: '10px' }}>OTP code</p>
-            <PinInput value={otp} onChange={setOtp} disabled={loading} autoFocus />
-
-            {otp.length === 6 && (
-              <>
-                <p style={{ ...labelStyle, textAlign: 'center', marginTop: '20px', marginBottom: '10px' }}>
-                  New PIN
-                </p>
-                <PinInput value={newPin} onChange={setNewPin} disabled={loading || newPin.length === 6} />
-                {newPin.length === 6 && (
-                  <>
-                    <p style={{ ...labelStyle, textAlign: 'center', marginTop: '20px', marginBottom: '10px' }}>
-                      Confirm new PIN
-                    </p>
-                    <PinInput value={newPinConfirm} onChange={setNewPinConfirm} disabled={loading} autoFocus />
-                  </>
+            {step === 'otp_verify' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                <PinInput value={otp} onChange={setOtp} disabled={loading} autoFocus />
+                
+                {otp.length === 6 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)' }}>New PIN</p>
+                      <PinInput value={newPin} onChange={setNewPin} disabled={loading} />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)' }}>Confirm New PIN</p>
+                      <PinInput value={newPinConfirm} onChange={setNewPinConfirm} disabled={loading} />
+                    </div>
+                  </div>
                 )}
-              </>
+              </div>
             )}
 
-            {error && <div role="alert" style={errorStyle}>{error}</div>}
-            {loading && (
-              <p style={{ textAlign: 'center', marginTop: '12px', color: 'var(--color-text-muted)', fontSize: '13px' }}>
-                Resetting PIN…
-              </p>
+            {error && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  background: 'color-mix(in srgb, var(--color-error) 10%, white)',
+                  color: 'var(--color-error)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)',
+                }}
+              >
+                {error}
+              </div>
             )}
 
-            {otp.length === 6 && newPin.length === 6 && newPinConfirm.length === 6 && !loading && (
-              <button style={btnStyle} onClick={handleOtpVerify}>
-                Reset PIN &amp; Log In
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button
+                onClick={step === 'otp_request' ? handleOtpRequest : handleOtpVerify}
+                disabled={loading || (step === 'otp_verify' && (otp.length < 6 || newPin.length < 6 || newPinConfirm.length < 6))}
+                style={{
+                  width: '100%',
+                  padding: '18px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'var(--color-primary)',
+                  color: 'var(--color-white)',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  boxShadow: '0 8px 24px color-mix(in srgb, var(--color-primary) 30%, transparent)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                {loading ? 'Processing...' : step === 'otp_request' ? 'Send OTP' : 'Reset PIN & Login'}
               </button>
-            )}
-
-            <button
-              style={backLabel}
-              onClick={() => { setStep('otp_request'); setOtp(''); setNewPin(''); setNewPinConfirm(''); clearError(); }}
-            >
-              ← Back
-            </button>
-          </>
+              <button
+                onClick={() => {
+                  setStep('pin');
+                  clearError();
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted)',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                ← Back to Login
+              </button>
+            </div>
+          </div>
         )}
       </div>
-    </div>
+    </main>
   );
 }

@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState } from 'react';
@@ -102,7 +103,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               border: '2px solid var(--color-border)',
             }}
           >
-             <Microphone2 size={32} variant="Linear" color="var(--color-text)" />
+            <Microphone2 size={32} variant="Linear" color="var(--color-text)" />
           </div>
           <div
             style={{
@@ -116,7 +117,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
               border: '2px solid var(--color-border)',
             }}
           >
-             <Notification size={32} variant="Linear" color="var(--color-text)" />
+            <Notification size={32} variant="Linear" color="var(--color-text)" />
           </div>
         </div>
       )
@@ -188,7 +189,7 @@ export function Onboarding({ onComplete }: OnboardingProps) {
         }}
       >
         {steps[currentStep].visual}
-        
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           <h1
             style={{
