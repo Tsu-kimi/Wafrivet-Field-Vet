@@ -4,7 +4,7 @@
  * Runs in the AudioWorkletGlobalScope (dedicated audio rendering thread),
  * replacing the deprecated ScriptProcessorNode.
  *
- * Receives real-time Float32 frames from the audio graph, accumulates ~100 ms
+ * Receives real-time Float32 frames from the audio graph, accumulates ~40 ms
  * of audio, resamples to 16 kHz if the AudioContext ran at a different native
  * rate (e.g. 44100 or 48000 Hz on Android), converts to Int16 (s16le mono),
  * and posts a transferable ArrayBuffer to the main thread via MessagePort.
@@ -30,9 +30,9 @@ class PCMProcessor extends AudioWorkletProcessor {
     /**
      * `sampleRate` is a global in AudioWorkletGlobalScope — the actual rate
      * the AudioContext is running at (may differ from 16 kHz on mobile).
-     * Accumulate enough frames for ~100 ms at the ACTUAL rate.
+     * Accumulate enough frames for ~40 ms at the ACTUAL rate.
      */
-    this._chunkFrames = Math.round(sampleRate * 0.1);
+    this._chunkFrames = Math.round(sampleRate * 0.04);
     this._buffer = [];
     this._bufferedFrames = 0;
   }

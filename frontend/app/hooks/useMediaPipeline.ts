@@ -11,6 +11,7 @@
  *                           echoCancellation: true, noiseSuppression: true } })
  *   → AudioWorkletNode ('pcm-processor' — /public/pcm-processor.js)
  *   → resamples to 16 kHz + converts Float32 → Int16 in audio thread
+ *   → emits ~40 ms chunks to keep Live API latency low
  *   → onAudioChunk(ArrayBuffer)   [caller sends as binary WS frame]
  *
  * Video path:
