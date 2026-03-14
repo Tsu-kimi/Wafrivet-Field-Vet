@@ -26,7 +26,6 @@ Run:
 """
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Any, AsyncIterator, List, Optional, cast
@@ -173,9 +172,7 @@ class TestEventFactories:
 # bridge.py downstream event routing tests
 # ---------------------------------------------------------------------------
 
-pytestmark = pytest.mark.asyncio
-
-
+@pytest.mark.asyncio
 class TestBridgeDownstream:
     """
     Test the downstream event routing in run_bridge() by injecting fake events
