@@ -869,40 +869,66 @@ export function FieldVetSession() {
 
             <div
               style={{
-                maxHeight: '180px',
+                maxHeight: '220px',
                 overflowY: 'auto',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '8px',
-                paddingRight: '2px',
+                paddingRight: '4px',
               }}
             >
               {addressLoading ? (
                 <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '13px' }}>Loading addresses...</p>
               ) : addresses.length === 0 ? (
                 <p style={{ margin: 0, color: 'var(--color-text-muted)', fontSize: '13px' }}>
-                  No saved addresses yet.
+                  No saved addresses yet. Add one below.
                 </p>
               ) : (
-                addresses.map((addr) => {
+                [...addresses]
+                  .sort((a, b) => {
+                    if (a.id === selectedAddressId) return -1;
+                    if (b.id === selectedAddressId) return 1;
+                    return 0;
+                  })
+                  .map((addr) => {
                   const isSelected = addr.id === selectedAddressId;
                   return (
                     <div
                       key={addr.id}
                       style={{
-                        border: `1px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
+                        border: `2px solid ${isSelected ? 'var(--color-primary)' : 'var(--color-border)'}`,
                         borderRadius: '12px',
-                        padding: '10px',
+                        padding: '10px 12px',
                         background: isSelected
-                          ? 'color-mix(in srgb, var(--color-primary) 14%, transparent)'
+                          ? 'color-mix(in srgb, var(--color-primary) 10%, var(--color-surface))'
                           : 'var(--color-bg)',
+                        transition: 'border-color 0.15s, background 0.15s',
                       }}
                     >
-                      <p style={{ margin: 0, color: 'var(--color-text)', fontSize: '13px', fontWeight: 700 }}>
-                        {addr.formatted}
-                      </p>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+                        <p style={{ margin: 0, color: 'var(--color-text)', fontSize: '13px', fontWeight: 700, flex: 1 }}>
+                          {addr.formatted}
+                        </p>
+                        {isSelected && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            background: 'var(--color-primary)',
+                            color: 'var(--color-white)',
+                            borderRadius: '20px',
+                            padding: '2px 8px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            whiteSpace: 'nowrap',
+                            flexShrink: 0,
+                          }}>
+                            ✓ Delivery
+                          </span>
+                        )}
+                      </div>
                       <p style={{ margin: '4px 0 0', color: 'var(--color-text-muted)', fontSize: '12px' }}>
-                        Delivery phone: {addr.delivery_phone}
+                        Phone: {addr.delivery_phone}
                       </p>
                       <div style={{ display: 'flex', gap: '8px', marginTop: '8px', flexWrap: 'wrap' }}>
                         {!isSelected && (
@@ -910,30 +936,32 @@ export function FieldVetSession() {
                             onClick={() => void selectAddress(addr.id)}
                             disabled={addressSaving}
                             style={{
-                              minHeight: '34px',
+                              minHeight: '32px',
                               borderRadius: '8px',
                               border: 'none',
                               background: 'var(--color-primary)',
                               color: 'var(--color-white)',
-                              padding: '0 10px',
+                              padding: '0 12px',
                               fontSize: '12px',
                               fontWeight: 700,
+                              cursor: 'pointer',
                             }}
                           >
-                            Select
+                            Use for delivery
                           </button>
                         )}
                         <button
                           onClick={() => startEditAddress(addr)}
                           disabled={addressSaving}
                           style={{
-                            minHeight: '34px',
+                            minHeight: '32px',
                             borderRadius: '8px',
                             border: '1px solid var(--color-border)',
                             background: 'transparent',
                             color: 'var(--color-text)',
                             padding: '0 10px',
                             fontSize: '12px',
+                            cursor: 'pointer',
                           }}
                         >
                           Edit
@@ -942,13 +970,14 @@ export function FieldVetSession() {
                           onClick={() => void deleteAddress(addr.id)}
                           disabled={addressSaving}
                           style={{
-                            minHeight: '34px',
+                            minHeight: '32px',
                             borderRadius: '8px',
                             border: '1px solid color-mix(in srgb, var(--color-error) 45%, var(--color-border))',
                             background: 'transparent',
                             color: 'var(--color-error)',
                             padding: '0 10px',
                             fontSize: '12px',
+                            cursor: 'pointer',
                           }}
                         >
                           Delete

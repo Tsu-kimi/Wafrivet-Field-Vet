@@ -132,7 +132,9 @@ async def manage_delivery_address(
         if missing:
             return {
                 "status": "error",
-                "data": {"missing_fields": missing},
+                # Mark as intermediate so the bridge suppresses the noisy frontend
+                # TOOL_ERROR event — the retry plugin handles this automatically.
+                "data": {"missing_fields": missing, "_intermediate": True},
                 "message": f"Missing required address fields: {', '.join(missing)}.",
             }
 

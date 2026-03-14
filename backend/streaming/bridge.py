@@ -563,20 +563,27 @@ async def _route_tool_response(
     message: str = resp_dict.get("message", "")
 
     if status != "success":
-        await websocket.send_json(tool_error_event(tool_name=tool_name, error=message))
-        await websocket.send_json(
-            tool_call_debug_event(
-                tool_name=tool_name,
-                status="error",
-                message=message or f"{tool_name} returned non-success status",
-                details={"status": status, "data": _summarize_tool_data(data)},
+        # Intermediate errors (e.g. missing address fields that the retry plugin
+        # will resolve automatically) are logged server-side only — broadcasting
+        # them to the frontend would generate confusing console warnings for the
+        # user without any actionable information.
+        is_intermediate = bool(data.get("_intermediate"))
+        if not is_intermediate:
+            await websocket.send_json(tool_error_event(tool_name=tool_name, error=message))
+            await websocket.send_json(
+                tool_call_debug_event(
+                    tool_name=tool_name,
+                    status="error",
+                    message=message or f"{tool_name} returned non-success status",
+                    details={"status": status, "data": _summarize_tool_data(data)},
+                )
             )
-        )
         logger.info(
             {
                 "event": "tool_error",
                 "tool": tool_name,
                 "error": message,
+                "intermediate": is_intermediate,
                 "session_id": session_id,
             }
         )

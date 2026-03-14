@@ -270,7 +270,14 @@ async def manage_cart(
                     SET items_json   = EXCLUDED.items_json,
                         total_amount = EXCLUDED.total_amount,
                         session_id   = EXCLUDED.session_id,
-                        status       = 'active',
+                        -- Never overwrite payment_received or completed statuses;
+                        -- those are set by webhooks and consumed by place_order.
+                        -- pending_payment is reset to active because cart changed.
+                        status       = CASE
+                                         WHEN public.carts.status IN ('payment_received', 'completed')
+                                         THEN public.carts.status
+                                         ELSE 'active'
+                                       END,
                         updated_at   = NOW()
                 """,
                 phone,

@@ -172,26 +172,6 @@ async def generate_checkout_link(
             ),
         }
 
-    # Validate cart_total
-    try:
-        total_naira = int(cart_total)
-    except (TypeError, ValueError):
-        return {
-            "status": "error",
-            "data": {},
-            "message": "cart_total must be a whole number in Naira.",
-        }
-
-    if total_naira <= 0:
-        return {
-            "status": "error",
-            "data": {},
-            "message": (
-                "The cart is empty or the total is zero. "
-                "Please add at least one product before checking out."
-            ),
-        }
-
     if not auth_session_id:
         return {
             "status": "error",
@@ -199,7 +179,7 @@ async def generate_checkout_link(
             "message": "Session not established. Please reconnect.",
         }
 
-    # Enforce delivery address before checkout so paid orders are deliverable.
+    # Enforce delivery address AND verify cart contents before checkout.
     from backend.db.rls import rls_context
     try:
         async with rls_context(auth_session_id, phone=phone) as conn:
@@ -239,12 +219,22 @@ async def generate_checkout_link(
                     phone,
                 )
                 delivery_address = ((legacy_row["delivery_address"] if legacy_row else "") or "").strip()
+
+            # Read cart from DB as the canonical source of truth for total and items.
+            cart_row = await conn.fetchrow(
+                """
+                SELECT items_json, total_amount
+                  FROM public.carts
+                 WHERE phone = $1
+                """,
+                phone,
+            )
     except Exception as db_exc:
-        logger.error("generate_checkout_link: failed to load cart address: %s", db_exc)
+        logger.error("generate_checkout_link: failed to load cart/address: %s", db_exc)
         return {
             "status": "error",
             "data": {},
-            "message": "Could not verify your delivery address. Please try again.",
+            "message": "Could not verify your cart or delivery address. Please try again.",
         }
 
     if len(delivery_address) < 8:
@@ -256,6 +246,42 @@ async def generate_checkout_link(
                 "Open the location menu and fill in your full delivery address."
             ),
         }
+
+    # Use the DB cart total as the source of truth. Fall back to the agent-supplied
+    # cart_total parameter only when the DB has no cart row yet (edge case).
+    import json as _json
+    if cart_row:
+        db_items = cart_row["items_json"]
+        if isinstance(db_items, str):
+            db_items = _json.loads(db_items)
+        db_items = db_items if isinstance(db_items, list) else []
+        db_total = float(cart_row["total_amount"] or 0)
+
+        if not db_items or db_total <= 0:
+            return {
+                "status": "error",
+                "data": {},
+                "message": (
+                    "Your cart is empty. Please ask Fatima to add at least one product "
+                    "to your cart before checking out."
+                ),
+            }
+        # DB total is the authoritative total; ignore agent-supplied cart_total.
+        total_naira = int(round(db_total))
+    else:
+        # No cart row in DB yet — validate the agent-supplied parameter as a last resort.
+        try:
+            total_naira = int(cart_total)
+        except (TypeError, ValueError):
+            total_naira = 0
+        if total_naira <= 0:
+            return {
+                "status": "error",
+                "data": {},
+                "message": (
+                    "Your cart is empty. Please add at least one product before checking out."
+                ),
+            }
 
     secret_key = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
     if not secret_key:
