@@ -495,9 +495,14 @@ async def websocket_endpoint(
         _active_session = await _session_service.get_session(
             app_name=_APP_NAME, user_id=user_id, session_id=session_id
         )
+        # Prefer the canonical farmer_phone resolved earlier; if it's not yet
+        # available (e.g. first ever connect), fall back to the userId that the
+        # frontend sets to the phone number (without leading '+').
         _phone_for_cart: str = str(
             (_active_session.state.get("farmer_phone") if _active_session else None) or ""
         )
+        if not _phone_for_cart and user_id and user_id.isdigit():
+            _phone_for_cart = f"+{user_id}"
         if _phone_for_cart:
             from backend.db.rls import rls_context as _rls2
             import json as _json2

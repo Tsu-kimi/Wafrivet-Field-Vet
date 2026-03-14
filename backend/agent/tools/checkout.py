@@ -298,40 +298,27 @@ async def generate_checkout_link(
                 ),
             }
 
-    secret_key = os.environ.get("PAYSTACK_SECRET_KEY", "").strip()
-    if not secret_key:
-        return {
-            "status": "error",
-            "data": {},
-            "message": "Payment service is not configured. Please contact support.",
-        }
-
-    email = _phone_to_email(phone)
+    # Phase 5 change:
+    # We no longer call the Paystack Initialize Transaction API from the backend.
+    # Instead, we generate a unique reference, persist it, and let the frontend
+    # open the Paystack inline checkout using this reference. This avoids
+    # duplicate-transaction errors caused by initialising the same reference
+    # twice (server + inline JS).
     amount_kobo = total_naira * 100
     reference = f"WAFRIVET-{uuid.uuid4().hex[:12].upper()}"
 
     logger.info(
-        "generate_checkout_link: initialising Paystack txn for %s "
+        "generate_checkout_link: prepared Paystack reference for %s "
         "amount=₦%d ref=%s",
         phone,
         total_naira,
         reference,
     )
 
-    try:
-        paystack_response = _call_paystack(email, amount_kobo, reference, secret_key)
-    except RuntimeError as exc:
-        logger.error("generate_checkout_link: Paystack call failed: %s", exc)
-        return {
-            "status": "error",
-            "data": {},
-            "message": (
-                "Payment link generation failed. Please try again or "
-                "contact support if the problem persists."
-            ),
-        }
-
-    checkout_url: str = paystack_response["data"]["authorization_url"]
+    # Frontend uses the reference with Paystack inline JS; checkout_url is only
+    # a presence flag for showing the Pay button, so we can use a simple
+    # placeholder value here.
+    checkout_url: str = f"inline:{reference}"
 
     # Persist checkout_url and payment_reference to the carts table via asyncpg.
     # Non-fatal: we return the checkout URL even if DB persistence fails so the
