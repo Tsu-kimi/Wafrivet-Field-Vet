@@ -20,7 +20,6 @@ Environment variables required:
 from __future__ import annotations
 
 import logging
-import os
 import re
 from typing import Any
 
@@ -88,6 +87,7 @@ async def update_cart(
             message (str):  Confirmation or error description.
     """
     # Validate inputs
+    phone = (phone or "").strip() or str(tool_context.state.get("farmer_phone") or "").strip()
     try:
         phone = _validate_phone(phone)
     except ValueError as exc:
@@ -125,7 +125,10 @@ async def update_cart(
         async with rls_context(auth_session_id, phone=phone) as conn:
             row = await conn.fetchrow(
                 "SELECT id, items_json, total_amount, status "
-                "FROM public.carts WHERE phone = $1",
+                "FROM public.carts "
+                "WHERE phone = $1 AND COALESCE(status, 'active') = 'active' "
+                "ORDER BY updated_at DESC "
+                "LIMIT 1",
                 phone,
             )
 
@@ -134,13 +137,6 @@ async def update_cart(
                     "status": "error",
                     "data":   {},
                     "message": "No active cart found for this phone number.",
-                }
-
-            if row["status"] not in ("active", None):
-                return {
-                    "status": "error",
-                    "data":   {},
-                    "message": "This cart has already been submitted and cannot be modified.",
                 }
 
             items_raw = row["items_json"]

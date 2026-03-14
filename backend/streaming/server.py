@@ -378,8 +378,9 @@ async def websocket_endpoint(
         initial_state["auth_session_id"] = auth_session_id
 
         # If the farmer has already logged in, the sessions row will have
-        # phone_number set by POST /farmers/login. Populate farmer_phone in
-        # the ADK session state so Fatima greets them by name without asking.
+        # phone_number set by POST /farmers/login. Populate farmer identity
+        # fields in ADK state so tools like get_order_history can run without
+        # re-auth prompts.
         try:
             from backend.db.rls import rls_context as _rls
             async with _rls(auth_session_id) as _conn:
@@ -394,6 +395,7 @@ async def websocket_endpoint(
                 )
             if _row and _row["phone_number"]:
                 initial_state["farmer_phone"] = _row["phone_number"]
+                initial_state["farmer_phone_verified"] = True
                 if _row["name"]:
                     initial_state["farmer_name"] = _row["name"]
         except Exception as _exc:
@@ -410,6 +412,29 @@ async def websocket_endpoint(
         # Ensure auth_session_id is always up to date in existing session state.
         if existing.state.get("auth_session_id") != auth_session_id:
             existing.state["auth_session_id"] = auth_session_id
+
+        # Refresh farmer identity on every websocket resume. This covers the
+        # common path where login happened after the ADK session was created.
+        try:
+            from backend.db.rls import rls_context as _rls
+            async with _rls(auth_session_id) as _conn:
+                _row = await _conn.fetchrow(
+                    """
+                    SELECT s.phone_number, f.name
+                      FROM public.sessions s
+                      LEFT JOIN public.farmers f ON f.phone_number = s.phone_number
+                     WHERE s.session_id = $1
+                    """,
+                    auth_session_id,
+                )
+            if _row and _row["phone_number"]:
+                existing.state["farmer_phone"] = _row["phone_number"]
+                existing.state["farmer_phone_verified"] = True
+                if _row["name"]:
+                    existing.state["farmer_name"] = _row["name"]
+        except Exception as _exc:
+            log.warning("session_phone_refresh_failed", auth_session_id=auth_session_id, error=str(_exc))
+
         log.info("session_resumed", user_id=user_id, session_id=session_id, auth_session_id=auth_session_id)
 
     # Structured session_open log — visible in Cloud Run log stream during demo.

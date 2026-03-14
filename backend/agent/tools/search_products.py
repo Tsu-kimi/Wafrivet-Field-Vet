@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import time
 from functools import lru_cache
 from typing import Any, Optional
@@ -38,6 +39,25 @@ _EMBEDDING_DIMENSIONS  = 1536
 _RETRY_ATTEMPTS        = 3
 _RETRY_DELAY           = 4       # seconds between Vertex AI retries
 _MAX_RESULTS           = 5
+
+_SPECIES_HINTS: dict[str, tuple[str, ...]] = {
+    "cattle": ("cattle", "cow", "cows", "bovine"),
+    "goat": ("goat", "goats", "caprine"),
+    "sheep": ("sheep", "ovine", "ram", "ewes"),
+    "poultry": ("poultry", "chicken", "broiler", "layers", "bird"),
+    "pig": ("pig", "pigs", "swine", "porcine"),
+}
+
+_GENERIC_PRODUCT_WORDS = (
+    "product",
+    "products",
+    "medicine",
+    "medicines",
+    "drug",
+    "drugs",
+    "treatment",
+    "treatments",
+)
 
 
 # ---------------------------------------------------------------------------
@@ -201,6 +221,24 @@ def _shape_result(row: dict[str, Any], rank: int) -> dict[str, Any]:
     }
 
 
+def _enrich_query_for_species_intent(query: str) -> str:
+    """Expand generic animal queries so hybrid retrieval anchors to vet commerce intent."""
+    lowered = query.lower()
+    if not any(word in lowered for word in _GENERIC_PRODUCT_WORDS):
+        return query
+
+    matched_species: list[str] = []
+    for canonical, aliases in _SPECIES_HINTS.items():
+        if any(re.search(rf"\\b{re.escape(alias)}\\b", lowered) for alias in aliases):
+            matched_species.append(canonical)
+
+    if not matched_species:
+        return query
+
+    species_tail = ", ".join(dict.fromkeys(matched_species))
+    return f"{query} veterinary medicines and treatments for {species_tail}"
+
+
 # ---------------------------------------------------------------------------
 # Public ADK tool — search_products
 # ---------------------------------------------------------------------------
@@ -252,15 +290,16 @@ def search_products(
             message (str):  Human-readable summary for the agent to read aloud.
     """
     # Validate and sanitise query — no raw DB interpolation
-    query = (query or "").strip()
-    if not query:
+    raw_query = (query or "").strip()
+    if not raw_query:
         return {
             "status": "error",
             "data":   {},
             "message": "A search query is required. Please describe the product you need.",
         }
     # Cap query length to prevent abuse / unexpectedly large embeddings
-    query = query[:400]
+    raw_query = raw_query[:400]
+    query = _enrich_query_for_species_intent(raw_query)
 
     # Resolve farmer state from session if not passed explicitly
     state: str = (farmer_state or "").strip()
@@ -330,12 +369,12 @@ def search_products(
             "status": "success",
             "data": {
                 "products":    [],
-                "query":       query,
+                "query":       raw_query,
                 "state":       state,
                 "total_found": 0,
             },
             "message": (
-                f"I could not find any products matching '{query}' available in "
+                f"I could not find any products matching '{raw_query}' available in "
                 f"{state} right now. Try a different name or a broader term."
             ),
         }
@@ -350,7 +389,7 @@ def search_products(
         "status": "success",
         "data": {
             "products":    shaped,
-            "query":       query,
+            "query":       raw_query,
             "state":       state,
             "total_found": len(shaped),
         },

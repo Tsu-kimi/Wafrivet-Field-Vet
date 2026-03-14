@@ -10,12 +10,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { Onboarding } from './components/Onboarding';
 import { AuthScreen } from './components/AuthScreen';
 import { WebSocketProvider } from './components/WebSocketProvider';
 import { FieldVetSession } from './components/FieldVetSession';
 
-const ONBOARDED_KEY = 'wafrivet_onboarded_v3';
 const USER_IDENTITY_KEY = 'wafrivet_user_identity';
 const FARMER_KEY = 'wafrivet_farmer';
 

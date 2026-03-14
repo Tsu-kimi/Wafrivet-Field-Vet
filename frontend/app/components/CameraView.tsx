@@ -31,6 +31,8 @@ export interface CameraViewProps {
    * Must call resumeContext() + activateMic() to unlock Web Audio + camera.
    */
   onFirstTap: () => Promise<void>;
+  /** Called when the connection chip is tapped in error state. */
+  onRetryConnection: () => void;
 }
 
 export function CameraView({
@@ -40,18 +42,24 @@ export function CameraView({
   permissionError,
   connectionState,
   onFirstTap,
+  onRetryConnection,
 }: CameraViewProps) {
   const hasActivatedRef = useRef(false);
 
   const handleTap = useCallback(
     async (e: React.MouseEvent | React.TouchEvent) => {
+      if (connectionState === 'error') {
+        e.preventDefault();
+        onRetryConnection();
+        return;
+      }
       // Only capture the first interaction — subsequent taps pass through.
       if (hasActivatedRef.current || isCapturing) return;
       e.preventDefault();
       hasActivatedRef.current = true;
       await onFirstTap();
     },
-    [isCapturing, onFirstTap],
+    [connectionState, isCapturing, onFirstTap, onRetryConnection],
   );
 
   return (

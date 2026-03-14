@@ -30,6 +30,7 @@ import React, {
   useState,
   useCallback,
 } from 'react';
+import { useRouter } from 'next/navigation';
 
 import { useWebSocketContext } from './WebSocketProvider';
 import { Notification, CloseSquare } from 'iconsax-react';
@@ -40,17 +41,19 @@ import { CameraView } from './CameraView';
 import { LocationBanner } from './LocationBanner';
 import { ProductCardRow } from './ProductCardRow';
 import { ClinicCardRow } from './ClinicCardRow';
-import { CartBadge } from './CartBadge';
 import { PayButton } from './PayButton';
 
 import { MediaControls } from './MediaControls';
 import { ActionMenu } from './ActionMenu';
+import { CartOverlay } from './CartOverlay';
 
 import type { Product } from '@/app/types/events';
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export function FieldVetSession() {
+  const router = useRouter();
+
   // ── WebSocket context ───────────────────────────────────────────────────────
   const {
     connectionState,
@@ -70,6 +73,7 @@ export function FieldVetSession() {
     sendText,
     resumeContext,
     sendLocationData,
+    retryConnection,
     clearError,
   } = useWebSocketContext();
 
@@ -141,6 +145,9 @@ export function FieldVetSession() {
   const [isToastVisible, setIsToastVisible] = useState(false);
   const [showErrorLog, setShowErrorLog] = useState(false);
   const [showOrderToast, setShowOrderToast] = useState(false);
+  const [showCartOverlay, setShowCartOverlay] = useState(false);
+  const [showStateEditor, setShowStateEditor] = useState(false);
+  const [stateDraft, setStateDraft] = useState('');
 
   // ── Delivery address modal state ───────────────────────────────────────────
   const [showAddressModal, setShowAddressModal] = useState(false);
@@ -287,18 +294,6 @@ export function FieldVetSession() {
     await activateMic();
   }, [resumeContext, activateMic]);
 
-  // ── Cart update version — drives CartBadge pulse animation ─────────────────
-  const [cartVersion, setCartVersion] = useState(0);
-  const prevCartTotalRef = useRef(cartTotal);
-  useEffect(() => {
-    if (cartTotal !== prevCartTotalRef.current || cartItems.length !== prevCartTotalRef.current) {
-      if (cartTotal !== prevCartTotalRef.current) {
-        prevCartTotalRef.current = cartTotal;
-        setCartVersion((v) => v + 1);
-      }
-    }
-  }, [cartTotal, cartItems.length]);
-
   // ── Location banner manual-deny state ──────────────────────────────────────
   // Optimistically dismiss the banner immediately on confirm, then send the
   // location message so the agent can call update_location in the background.
@@ -310,16 +305,51 @@ export function FieldVetSession() {
     [sendText],
   );
 
-  const handleResetLocation = useCallback(() => {
-    setLocalConfirmedLocation(null);
-    // You might also want to tell the user they can re-detect or re-enter
+  const handleShowCart = useCallback(() => {
+    setShowCartOverlay(true);
   }, []);
 
-  const handleShowCart = useCallback(() => {
-    // Scroll to cart or highlight cart badge
-    // Since CartBadge has its own positioning, we'll just pulse it again
-    setCartVersion(v => v + 1);
-  }, []);
+  const handleAuthAction = useCallback(() => {
+    const hasFarmer = !!localStorage.getItem('wafrivet_farmer');
+    if (hasFarmer) {
+      localStorage.removeItem('wafrivet_farmer');
+      localStorage.removeItem('wafrivet_user_identity');
+      sessionStorage.removeItem('wafrivet_user_id');
+      sessionStorage.removeItem('wafrivet_session_id');
+      router.replace('/login');
+      return;
+    }
+    router.replace('/login');
+  }, [router]);
+
+  const handleCartIncrement = useCallback((item: { product_name: string; quantity: number }) => {
+    sendText(`Change ${item.product_name} quantity to ${item.quantity + 1}`);
+  }, [sendText]);
+
+  const handleCartDecrement = useCallback((item: { product_name: string; quantity: number }) => {
+    const nextQty = Math.max(item.quantity - 1, 0);
+    if (nextQty === 0) {
+      sendText(`Remove ${item.product_name} from my cart`);
+      return;
+    }
+    sendText(`Change ${item.product_name} quantity to ${nextQty}`);
+  }, [sendText]);
+
+  const handleCartRemove = useCallback((item: { product_name: string }) => {
+    sendText(`Remove ${item.product_name} from my cart`);
+  }, [sendText]);
+
+  const handleCartCheckout = useCallback(() => {
+    sendText('I am ready to checkout now.');
+  }, [sendText]);
+
+  const handleSaveState = useCallback(() => {
+    const cleaned = stateDraft.trim();
+    if (!cleaned) return;
+    setLocalConfirmedLocation(cleaned);
+    sendText(`My location is ${cleaned}`);
+    setShowStateEditor(false);
+  }, [sendText, stateDraft]);
 
   // ── Add-to-cart voice command ───────────────────────────────────────────────
   const handleAddToCart = useCallback(
@@ -340,11 +370,6 @@ export function FieldVetSession() {
   const clinicRowBottom = products.length > 0
     ? `calc(${payButtonVisible ? '256px' : '170px'} + var(--spacing-safe-bottom))`
     : productRowBottom;
-  // CartBadge sits above product row — add ~160px for product row height
-  const cartBadgeBottom = payButtonVisible
-    ? 'calc(266px + var(--spacing-safe-bottom))'
-    : 'calc(180px + var(--spacing-safe-bottom))';
-
   // MediaControls bottom position — sitting just above the cart badge or pay button area
   const mediaControlsBottom = payButtonVisible
     ? 'calc(180px + var(--spacing-safe-bottom))'
@@ -370,6 +395,7 @@ export function FieldVetSession() {
         permissionError={permissionError}
         connectionState={connectionState}
         onFirstTap={handleFirstTap}
+        onRetryConnection={retryConnection}
       />
 
       {/* ── Scanning product overlay — shown while identify_product_from_frame is active (z=60) */}
@@ -450,17 +476,49 @@ export function FieldVetSession() {
       >
         <ActionMenu
           onShowNotifications={() => setShowErrorLog(true)}
-          onResetLocation={handleResetLocation}
           onManageAddress={() => {
             setShowAddressModal(true);
             void loadDeliveryAddress();
           }}
           onShowCart={handleShowCart}
+          onAuthAction={handleAuthAction}
+          isLoggedIn={typeof window !== 'undefined' && !!localStorage.getItem('wafrivet_farmer')}
           hasNotifications={notifications.length > 0}
           cartCount={cartItems.length}
           cartTotal={cartTotal}
         />
       </div>
+
+      {effectiveConfirmedLocation && (
+        <button
+          onClick={() => {
+            setStateDraft(effectiveConfirmedLocation);
+            setShowStateEditor(true);
+          }}
+          aria-label="Edit your state"
+          style={{
+            position: 'absolute',
+            top: 'calc(14px + var(--spacing-safe-top))',
+            right: '76px',
+            zIndex: 64,
+            maxWidth: '40vw',
+            minHeight: '38px',
+            borderRadius: '999px',
+            border: '1px solid var(--color-border)',
+            background: 'color-mix(in srgb, var(--color-surface-2) 80%, transparent)',
+            color: 'var(--color-white)',
+            padding: '0 12px',
+            fontSize: '12px',
+            fontWeight: 700,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            backdropFilter: 'blur(10px)',
+          }}
+        >
+          {effectiveConfirmedLocation}
+        </button>
+      )}
 
       {/* ── Error Log Panel ─────────────────────────────────────────────── */}
       {showErrorLog && (
@@ -704,6 +762,94 @@ export function FieldVetSession() {
           </div>
         </div>
       )}
+
+      {showStateEditor && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit state"
+          style={{
+            position: 'absolute',
+            inset: 0,
+            zIndex: 112,
+            background: 'rgba(0,0,0,0.45)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-border)',
+              borderRadius: '16px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <h3 style={{ margin: 0, color: 'var(--color-text)', fontFamily: 'var(--font-fraunces)' }}>Change State</h3>
+            <input
+              value={stateDraft}
+              onChange={(e) => setStateDraft(e.target.value)}
+              placeholder="e.g. Rivers"
+              style={{
+                minHeight: '46px',
+                borderRadius: '10px',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-bg)',
+                color: 'var(--color-text)',
+                padding: '0 12px',
+              }}
+            />
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowStateEditor(false)}
+                style={{
+                  minHeight: '42px',
+                  borderRadius: '10px',
+                  border: '1px solid var(--color-border)',
+                  background: 'transparent',
+                  color: 'var(--color-text)',
+                  padding: '0 14px',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveState}
+                style={{
+                  minHeight: '42px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'var(--color-primary)',
+                  color: 'var(--color-white)',
+                  padding: '0 14px',
+                  fontWeight: 700,
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <CartOverlay
+        open={showCartOverlay}
+        items={cartItems}
+        total={cartTotal}
+        onClose={() => setShowCartOverlay(false)}
+        onIncrement={handleCartIncrement}
+        onDecrement={handleCartDecrement}
+        onRemove={handleCartRemove}
+        onCheckout={handleCartCheckout}
+      />
 
       {/* ── Location banner — bottom sheet until confirmed (z=55) ─────── */}
       <LocationBanner

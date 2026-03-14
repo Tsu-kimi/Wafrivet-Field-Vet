@@ -117,6 +117,7 @@ export function useMediaPipeline({
 
   // ── Mandatory cleanup: kill camera LED on unmount ─────────────────────────
   useEffect(() => {
+    const mountedVideo = videoRef.current;
     return () => {
       if (frameTimerRef.current) {
         clearInterval(frameTimerRef.current);
@@ -127,8 +128,8 @@ export function useMediaPipeline({
       void audioCtxRef.current?.close();
       // MANDATORY: stop() every track so the browser removes the camera LED.
       streamRef.current?.getTracks().forEach(t => t.stop());
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
+      if (mountedVideo) {
+        mountedVideo.srcObject = null;
       }
     };
   }, []); // Runs cleanup exactly once on unmount.
@@ -138,9 +139,63 @@ export function useMediaPipeline({
     setIsMuted(prev => !prev);
   }, []);
 
-  const toggleCamera = useCallback(() => {
-    setIsCameraPaused(prev => !prev);
+  const restartVideoTrack = useCallback(async () => {
+    const stream = streamRef.current;
+    if (!stream) return;
+
+    try {
+      const videoOnly = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width:  { ideal: 640 },
+          height: { ideal: 480 },
+        },
+        audio: false,
+      });
+
+      const nextTrack = videoOnly.getVideoTracks()[0];
+      if (!nextTrack) {
+        setPermissionError('Could not restore camera stream. Please try again.');
+        return;
+      }
+
+      stream.getVideoTracks().forEach((t) => {
+        t.stop();
+        stream.removeTrack(t);
+      });
+      stream.addTrack(nextTrack);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      setPermissionError(null);
+    } catch {
+      setPermissionError('Could not restore camera stream. Please check permissions.');
+    }
   }, []);
+
+  const toggleCamera = useCallback(() => {
+    setIsCameraPaused((prev) => {
+      const next = !prev;
+      const stream = streamRef.current;
+      if (!stream) return next;
+
+      if (next) {
+        // Fully turn off camera hardware.
+        stream.getVideoTracks().forEach((t) => {
+          t.stop();
+          stream.removeTrack(t);
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = null;
+        }
+      } else {
+        void restartVideoTrack();
+      }
+
+      return next;
+    });
+  }, [restartVideoTrack]);
 
   // ── activateMic ───────────────────────────────────────────────────────────
   const activateMic = useCallback(async () => {

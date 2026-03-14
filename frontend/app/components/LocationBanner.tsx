@@ -17,7 +17,7 @@
  */
 
 import React, { useState, useId } from 'react';
-import { Location, Global } from 'iconsax-react';
+import { Location } from 'iconsax-react';
 
 
 export interface LocationBannerProps {
@@ -45,48 +45,9 @@ export function LocationBanner({
   const [manualState, setManualState] = useState('');
   const inputId = useId();
 
-  // ── Confirmed pill & Globe Link ───────────────────────────────────────────
-  // ── Confirmed pill (Floating banner removed; now handled by ActionMenu) ─────
+  // Confirmed state is rendered in FieldVetSession as an editable top-right chip.
   if (confirmedLocation) {
-    return (
-      <div style={{
-        position: 'absolute',
-        top: 'calc(14px + var(--spacing-safe-top))',
-        left: '16px',
-        zIndex: 55,
-        pointerEvents: 'none',
-      }}>
-        <div
-          role="status"
-          aria-live="polite"
-          style={{
-            background: 'color-mix(in srgb, var(--color-primary) 22%, transparent)',
-            border: '1px solid var(--color-white)',
-            borderRadius: '24px',
-            padding: '7px 14px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            animation: 'fade-in 0.4s ease',
-            backdropFilter: 'blur(8px)',
-            pointerEvents: 'auto',
-          }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center' }}>
-            <Location variant="Bold" color="var(--color-white)" size={16} />
-          </span>
-          <span
-            style={{
-              fontSize: '13px',
-              fontWeight: 700,
-              color: 'var(--color-white)',
-            }}
-          >
-            {confirmedLocation}
-          </span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const showManualInput = hasGPSError || isDenied;

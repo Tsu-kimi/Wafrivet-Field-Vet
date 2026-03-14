@@ -7,14 +7,16 @@ import {
   Global, 
   ShoppingCart, 
   Location,
-  CloseSquare
+  Login,
+  Logout
 } from 'iconsax-react';
 
 interface ActionMenuProps {
   onShowNotifications: () => void;
-  onResetLocation: () => void;
   onManageAddress: () => void;
   onShowCart: () => void;
+  onAuthAction: () => void;
+  isLoggedIn: boolean;
   hasNotifications: boolean;
   cartCount: number;
   cartTotal: number;
@@ -22,9 +24,10 @@ interface ActionMenuProps {
 
 export function ActionMenu({
   onShowNotifications,
-  onResetLocation,
   onManageAddress,
   onShowCart,
+  onAuthAction,
+  isLoggedIn,
   hasNotifications,
   cartCount,
   cartTotal,
@@ -220,6 +223,26 @@ export function ActionMenu({
             aria-label="Manage delivery address"
           >
             <Location variant="Linear" color="var(--color-white)" size={24} />
+          </button>
+
+          {/* Login / Logout Icon */}
+          <button
+            onClick={() => {
+              onAuthAction();
+              setIsOpen(false);
+            }}
+            style={{
+              ...baseItemStyle,
+              animation: 'menu-slide-down 0.3s cubic-bezier(0.22, 1, 0.36, 1) both',
+              animationDelay: '0.25s',
+            }}
+            aria-label={isLoggedIn ? 'Log out' : 'Log in'}
+          >
+            {isLoggedIn ? (
+              <Logout variant="Linear" color="var(--color-white)" size={24} />
+            ) : (
+              <Login variant="Linear" color="var(--color-white)" size={24} />
+            )}
           </button>
         </div>
       )}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { User, Call, ArrowRight2, ArrowLeft2, CloseCircle } from 'iconsax-react';
 
 interface AuthScreenProps {

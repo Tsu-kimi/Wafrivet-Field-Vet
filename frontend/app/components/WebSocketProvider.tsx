@@ -80,6 +80,8 @@ export interface WebSocketContextValue extends SessionState {
   resumeContext: () => void;
   /** Clear the lastError from the session state to allow it to trigger effects again. */
   clearError: () => void;
+  /** Force an immediate websocket reconnect (used by tap-to-retry UI). */
+  retryConnection: () => void;
 }
 
 const WebSocketContext = createContext<WebSocketContextValue | null>(null);
@@ -120,7 +122,7 @@ function getOrCreateIds(): SessionIds {
     try {
       const { phoneNumber } = JSON.parse(storedIdentity);
       userId = phoneNumber.replace(/\+/g, '');
-    } catch (e) {
+    } catch {
       // fallback
     }
   }
@@ -174,6 +176,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
     sendSessionContext,
     sendLocationData,
     clearError,
+    retryConnection,
   } = useWebSocketSession({
     wsBaseUrl,
     userId:    ids?.userId    ?? '',
@@ -200,6 +203,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       sendLocationData,
       resumeContext,
       clearError,
+      retryConnection,
     }),
     [
       state,
@@ -213,6 +217,7 @@ export function WebSocketProvider({ children }: { children: React.ReactNode }) {
       sendLocationData,
       resumeContext,
       clearError,
+      retryConnection,
     ],
   );
 

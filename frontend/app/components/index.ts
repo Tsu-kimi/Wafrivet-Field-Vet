@@ -18,6 +18,8 @@ export type { ClinicCardRowProps } from './ClinicCardRow';
 export { CartBadge } from './CartBadge';
 export type { CartBadgeProps } from './CartBadge';
 
+export { CartOverlay } from './CartOverlay';
+
 export { PayButton } from './PayButton';
 export type { PayButtonProps } from './PayButton';
 

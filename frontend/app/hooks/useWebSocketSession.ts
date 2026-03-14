@@ -100,6 +100,7 @@ type ReducerAction =
   | { type: 'CLEAR_ERROR' }
   | { type: 'ORDER_CONFIRMED'; order_reference: string; total: number; estimated_delivery: string; sms_sent: boolean; message: string }
   | { type: 'SCANNING_PRODUCT'; message: string }
+  | { type: 'CLEAR_SCANNING' }
   | { type: 'PAYMENT_CONFIRMED'; payment_reference: string; amount_ngn: number };
 
 const INITIAL_STATE: SessionState = {
@@ -135,7 +136,12 @@ function sessionReducer(state: SessionState, action: ReducerAction): SessionStat
       return { ...state, connectionState: 'idle' };
 
     case 'CONN_ERROR':
-      return { ...state, connectionState: 'error', lastError: action.message };
+      return {
+        ...state,
+        connectionState: 'error',
+        lastError: action.message,
+        isScanningProduct: false,
+      };
 
     case 'AGENT_SPEAKING':
       return { ...state, isAgentSpeaking: action.value };
@@ -175,16 +181,24 @@ function sessionReducer(state: SessionState, action: ReducerAction): SessionStat
       return {
         ...state,
         lastError: `Tool error in ${action.tool_name}: ${action.error}`,
+        isScanningProduct: false,
       };
 
     case 'MODEL_ERROR':
-      return { ...state, lastError: `${action.code}: ${action.message}` };
+      return {
+        ...state,
+        lastError: `${action.code}: ${action.message}`,
+        isScanningProduct: false,
+      };
 
     case 'CLEAR_ERROR':
       return { ...state, lastError: null };
 
     case 'SCANNING_PRODUCT':
       return { ...state, isScanningProduct: true };
+
+    case 'CLEAR_SCANNING':
+      return { ...state, isScanningProduct: false };
 
     case 'ORDER_CONFIRMED':
       return {
@@ -234,6 +248,8 @@ export function useWebSocketSession({
   const retryCountRef   = useRef(0);
   const retryTimerRef   = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef      = useRef(true);
+  const connectRef      = useRef<(() => void) | null>(null);
+  const manualRetryRef  = useRef(false);
 
   /**
    * Mirror of state.confirmedLocation kept in a ref so the reconnect
@@ -313,6 +329,7 @@ export function useWebSocketSession({
 
         case 'TURN_COMPLETE':
           dispatch({ type: 'AGENT_SPEAKING', value: false });
+          dispatch({ type: 'CLEAR_SCANNING' });
           break;
 
         case 'TRANSCRIPTION':
@@ -414,6 +431,11 @@ export function useWebSocketSession({
       if (!mountedRef.current) return;
       wsRef.current = null;
 
+      if (manualRetryRef.current) {
+        manualRetryRef.current = false;
+        return;
+      }
+
       // Normal close (component unmount) or explicitly disabled — no retry.
       if (event.code === 1000 || !enabled) {
         dispatch({ type: 'DISCONNECTED' });
@@ -439,6 +461,10 @@ export function useWebSocketSession({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wsBaseUrl, userId, sessionId, enabled]);
 
+  useEffect(() => {
+    connectRef.current = connect;
+  }, [connect]);
+
   // Start / stop the connection lifecycle.
   useEffect(() => {
     mountedRef.current = true;
@@ -451,6 +477,15 @@ export function useWebSocketSession({
   // Re-run only when `enabled` flips; `connect` ref stability is sufficient.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]);
+
+  // Safety net: if scan was triggered but no product event arrives, clear it.
+  useEffect(() => {
+    if (!state.isScanningProduct) return;
+    const timer = setTimeout(() => {
+      dispatch({ type: 'CLEAR_SCANNING' });
+    }, 45_000);
+    return () => clearTimeout(timer);
+  }, [state.isScanningProduct]);
 
   // ── Outbound helpers ────────────────────────────────────────────────────────
 
@@ -520,6 +555,20 @@ export function useWebSocketSession({
     dispatch({ type: 'CLEAR_ERROR' });
   }, []);
 
+  const retryConnection = useCallback(() => {
+    if (!mountedRef.current || !enabled) return;
+    if (retryTimerRef.current) {
+      clearTimeout(retryTimerRef.current);
+      retryTimerRef.current = null;
+    }
+    retryCountRef.current = 0;
+    if (wsRef.current && wsRef.current.readyState !== WebSocket.CLOSED) {
+      manualRetryRef.current = true;
+      wsRef.current.close(4001, 'manual retry');
+    }
+    connectRef.current?.();
+  }, [enabled]);
+
   return {
     state,
     sendAudioChunk,
@@ -529,5 +578,6 @@ export function useWebSocketSession({
     sendSessionContext,
     sendLocationData,
     clearError,
+    retryConnection,
   };
 }
