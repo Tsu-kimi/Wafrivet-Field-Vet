@@ -19,6 +19,8 @@ Wafri AI introduces Fatima, a real-time multimodal agent that sees, hears, and s
 
 Farmers can describe symptoms by voice or show animals on camera. Fatima triages the case, explains likely conditions in simple language, and decides whether to recommend treatment products or escalate to nearby clinics.
 
+Fatima's diagnosis engine is backed by a comprehensive veterinary disease database of **108+ diseases and conditions** spanning 10+ species groups — equine, bovine, porcine, poultry, small ruminants (sheep and goats), canine, feline, lagomorphs (rabbits), mustelids (ferrets), and more. Every condition includes key symptoms, visual observations, non-visual (internal/subclinical) symptoms, severity level, and a complete management protocol covering pharmacological, surgical, environmental, and biosecurity interventions. Semantic similarity search using pgvector and Vertex AI Gemini embeddings matches the farmer's description to the most relevant conditions, while a differential diagnosis protocol ensures Fatima asks targeted follow-up questions before committing to any single diagnosis.
+
 When a farmer shows an existing medicine bottle or asks for a product, Fatima reads labels, identifies the drug, searches WafriVet inventory, suggests safer or lower-cost options, and places an order linked to the farmer's phone number. Farmers then receive live SMS confirmation.
 
 For veterinary clinics, Fatima works as a procurement copilot: staff can ask for a medicine, compare distributor prices and stock, choose the best option quickly, and place orders without spending hours calling multiple suppliers.
@@ -30,7 +32,7 @@ The frontend is built with Next.js and streams microphone plus camera context in
 
 The backend is FastAPI deployed on Google Cloud Run. It manages one live session per farmer, orchestrates ADK tool-calling for diagnosis, product discovery, clinic escalation, and ordering, and emits real-time updates over WebSockets with Redis pub/sub.
 
-Supabase Postgres stores operational data including farmers, products, distributors, carts, and orders. We combine pgvector and full-text search for robust medicine retrieval and use migration-driven schema updates for safety.
+Supabase Postgres stores operational data including farmers, products, distributors, carts, and orders. We combine pgvector and full-text search for robust medicine retrieval and use migration-driven schema updates for safety. The disease knowledge base is stored in a dedicated `disease_content` table with 3072-dimensional Vertex AI Gemini embeddings per condition, enabling sub-second semantic symptom matching across 108+ diseases.
 
 Google Maps Geocoding and Google Places API (New) resolve location and nearest clinics. Termii and Africa's Talking connect the experience to real SMS, voice, and USSD channels for rural conditions.
 
