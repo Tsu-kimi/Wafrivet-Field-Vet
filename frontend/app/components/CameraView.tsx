@@ -15,7 +15,7 @@
  */
 
 import React, { useRef, useCallback } from 'react';
-import { Microphone2 } from 'iconsax-react';
+import { Microphone2, VideoSlash } from 'iconsax-react';
 import type { ConnectionState } from '@/app/hooks/useWebSocketSession';
 
 export interface CameraViewProps {
@@ -110,7 +110,7 @@ export function CameraView({
             zIndex: 1,
           }}
         >
-          <div style={{ fontSize: '48px', opacity: 0.5 }}>📷</div>
+          <VideoSlash size={64} variant="Broken" color="var(--color-primary)" style={{ opacity: 0.6 }} />
           <p style={{ fontWeight: 600, fontSize: '15px' }}>Camera is cut</p>
         </div>
       )}

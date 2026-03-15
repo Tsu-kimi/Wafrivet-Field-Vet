@@ -680,7 +680,7 @@ export function FieldVetSession() {
             minHeight: '42px',
             borderRadius: '999px',
             border: '1.5px solid var(--color-white)',
-            background: '#000000',
+            background: 'rgba(0, 0, 0, 0.45)',
             color: 'var(--color-white)',
             padding: '0 16px',
             fontSize: '14px',
@@ -689,7 +689,8 @@ export function FieldVetSession() {
             alignItems: 'center',
             gap: '8px',
             whiteSpace: 'nowrap',
-            backdropFilter: 'blur(10px)',
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
             boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
           }}
         >
