@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
-import Image from 'next/image';
+import NextImage from 'next/image';
+import { Box, Gallery, AddSquare } from 'iconsax-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -236,7 +237,8 @@ export default function ProductsPage() {
           </p>
         </div>
         <button onClick={openCreate} style={primaryBtnStyle}>
-          + Add Product
+          <AddSquare size={18} variant="Bulk" style={{ marginRight: 8, verticalAlign: 'middle' }} />
+          Add Product
         </button>
       </div>
 
@@ -277,10 +279,13 @@ export default function ProductsPage() {
         </div>
       ) : products.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '60px 24px', color: 'var(--color-text-muted)' }}>
-          <div style={{ fontSize: 40, marginBottom: 12 }}>📦</div>
+          <Box size={64} variant="Bulk" color="var(--color-sage)" style={{ opacity: 0.2, marginBottom: 16 }} />
           <div style={{ fontSize: 16, fontWeight: 600 }}>No products found</div>
           <div style={{ fontSize: 13, marginTop: 4 }}>Add your first product to the catalog</div>
-          <button onClick={openCreate} style={{ ...primaryBtnStyle, marginTop: 16 }}>+ Add Product</button>
+          <button onClick={openCreate} style={{ ...primaryBtnStyle, marginTop: 24 }}>
+            <AddSquare size={18} variant="Bulk" style={{ marginRight: 8, verticalAlign: 'middle' }} />
+            Add Product
+          </button>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
@@ -301,7 +306,7 @@ export default function ProductsPage() {
                   />
                 ) : (
                   <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <span style={{ fontSize: 32, opacity: 0.3 }}>📦</span>
+                    <Box size={48} variant="Bulk" style={{ opacity: 0.1 }} />
                   </div>
                 )}
                 {!p.is_active && (
@@ -404,7 +409,7 @@ export default function ProductsPage() {
                       <img src={imagePreview} alt="preview" style={{ maxHeight: 160, maxWidth: '100%', borderRadius: 8, objectFit: 'cover' }} />
                     ) : (
                       <div style={{ padding: '20px 0' }}>
-                        <div style={{ fontSize: 28, marginBottom: 8 }}>🖼️</div>
+                        <Gallery size={48} variant="Bulk" color="var(--color-sage)" style={{ opacity: 0.3, marginBottom: 8 }} />
                         <div style={{ fontSize: 13, color: 'var(--color-text-muted)' }}>Click to upload product image</div>
                         <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 4 }}>JPEG, PNG, WebP — max 5MB</div>
                       </div>

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { People, Profile2User, Lock, UserTick } from 'iconsax-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -84,7 +85,7 @@ export default function UsersPage() {
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-text-muted)' }}>Loading users…</div>
         ) : users.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
+            <People size={64} variant="Bulk" color="var(--color-sage)" style={{ opacity: 0.2, marginBottom: 16 }} />
             <div style={{ fontWeight: 600 }}>No users found</div>
           </div>
         ) : (
@@ -127,10 +128,11 @@ export default function UsersPage() {
                       <td style={tdStyle}>
                         {locked ? (
                           <span style={{
-                            display: 'inline-block', padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
+                            display: 'inline-flex', alignItems: 'center', gap: 4, 
+                            padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
                             background: 'rgba(248,81,73,0.15)', color: 'var(--color-error)',
                           }}>
-                            🔒 Locked
+                            <Lock size={12} variant="Bold" /> Locked
                           </span>
                         ) : (
                           <span style={{
@@ -155,9 +157,9 @@ export default function UsersPage() {
 
       {/* Stats summary */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        <MiniStat label="Total Users" value={total} />
-        <MiniStat label="With PIN Set" value={users.filter(u => u.pin_set_at).length} />
-        <MiniStat label="Locked Accounts" value={users.filter(u => isLocked(u)).length} color="var(--color-error)" />
+        <MiniStat label="Total Users" value={total} icon={<People size={18} variant="Bulk" />} />
+        <MiniStat label="With PIN Set" value={users.filter(u => u.pin_set_at).length} icon={<UserTick size={18} variant="Bulk" />} />
+        <MiniStat label="Locked Accounts" value={users.filter(u => isLocked(u)).length} color="var(--color-error)" icon={<Lock size={18} variant="Bulk" />} />
       </div>
 
       {/* Pagination */}
@@ -186,17 +188,29 @@ export default function UsersPage() {
   );
 }
 
-function MiniStat({ label, value, color }: { label: string; value: number; color?: string }) {
+function MiniStat({ label, value, color, icon }: { label: string; value: number; color?: string; icon?: React.ReactNode }) {
+  const iconColor = color ?? 'var(--color-sage)';
   return (
     <div style={{
-      background: 'var(--color-bone-light)', borderRadius: 10, padding: '12px 18px',
+      background: 'var(--color-bone-light)', borderRadius: 10, padding: '16px 20px',
       boxShadow: '0 1px 6px rgba(58,68,46,0.06)',
+      display: 'flex', alignItems: 'center', gap: 16,
+      minWidth: 180,
     }}>
-      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-        {label}
+      <div style={{ 
+        width: 36, height: 36, borderRadius: 8, background: `${iconColor}15`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: iconColor,
+        flexShrink: 0,
+      }}>
+        {icon}
       </div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: color ?? 'var(--color-forest)', fontFamily: 'var(--font-fraunces)', marginTop: 4 }}>
-        {value}
+      <div>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          {label}
+        </div>
+        <div style={{ fontSize: 24, fontWeight: 700, color: color ?? 'var(--color-forest)', fontFamily: 'var(--font-fraunces)', marginTop: 2 }}>
+          {value}
+        </div>
       </div>
     </div>
   );

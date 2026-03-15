@@ -1,6 +1,11 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Box, Profile2User, Bag2, WalletCheck } from 'iconsax-react';
+import { 
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
+  PieChart, Pie, Cell, Legend 
+} from 'recharts';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -45,21 +50,35 @@ const STATUS_LABELS: Record<string, string> = {
 
 // ── Stat card ─────────────────────────────────────────────────────────────────
 
-function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color?: string }) {
+function StatCard({ label, value, sub, color, icon }: { label: string; value: string | number; sub?: string; color?: string; icon?: React.ReactNode }) {
   return (
     <div style={{
-      background: 'var(--color-bone-light)', borderRadius: 12,
-      padding: '20px 24px',
-      boxShadow: '0 1px 8px rgba(58,68,46,0.07)',
-      borderLeft: `4px solid ${color ?? 'var(--color-sage)'}`,
+      background: '#fff', borderRadius: 8,
+      padding: '20px',
+      border: '1px solid rgba(107,125,86,0.15)',
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 12,
     }}>
-      <div style={{ fontSize: 12, color: 'var(--color-text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        {label}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 10, color: 'var(--color-text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          {label}
+        </div>
+        {icon && (
+          <div style={{ 
+            width: 28, height: 28, borderRadius: 6, background: `${color ?? 'var(--color-sage)'}10`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: color ?? 'var(--color-sage)'
+          }}>
+            {icon}
+          </div>
+        )}
       </div>
-      <div style={{ fontSize: 32, fontWeight: 700, color: 'var(--color-forest)', fontFamily: 'var(--font-fraunces)', marginTop: 6 }}>
-        {value}
+      <div>
+        <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--color-forest)', fontFamily: 'var(--font-fraunces)' }}>
+          {value}
+        </div>
+        {sub && <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2, fontWeight: 500 }}>{sub}</div>}
       </div>
-      {sub && <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 4 }}>{sub}</div>}
     </div>
   );
 }
@@ -80,6 +99,18 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
+
+// ── Mock data for charts ───────────────────────────────────────────────────
+
+const mockChartData = [
+  { name: 'Mon', orders: 4 },
+  { name: 'Tue', orders: 7 },
+  { name: 'Wed', orders: 5 },
+  { name: 'Thu', orders: 8 },
+  { name: 'Fri', orders: 12 },
+  { name: 'Sat', orders: 6 },
+  { name: 'Sun', orders: 9 },
+];
 
 // ── Main page ─────────────────────────────────────────────────────────────────
 
@@ -118,47 +149,75 @@ export default function AdminDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
         <StatCard label="Total Products" value={metrics.products.total}
           sub={`${metrics.products.active} active · ${metrics.products.inactive} inactive`}
-          color="var(--color-sage)" />
+          color="var(--color-sage)" icon={<Box size={20} variant="Bulk" />} />
         <StatCard label="Registered Users" value={metrics.farmers.total}
           sub="Farmers with verified phone"
-          color="#3fb950" />
+          color="#3fb950" icon={<Profile2User size={20} variant="Bulk" />} />
         <StatCard label="Total Orders" value={metrics.orders.total}
           sub={`${paidOrders} paid`}
-          color="#58a6ff" />
+          color="#58a6ff" icon={<Bag2 size={20} variant="Bulk" />} />
         <StatCard
           label="Total Revenue"
           value={`₦${totalRevenue.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`}
           sub="From paid & completed orders"
           color="#d29922"
+          icon={<WalletCheck size={20} variant="Bulk" />}
         />
       </div>
 
-      {/* Order status breakdown */}
-      <div style={{ background: 'var(--color-bone-light)', borderRadius: 12, padding: 24, boxShadow: '0 1px 8px rgba(58,68,46,0.07)' }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-forest)', marginBottom: 16, fontFamily: 'var(--font-fraunces)' }}>
-          Orders by Status
-        </h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-          {Object.entries(metrics.orders.byStatus).map(([status, count]) => (
-            <div key={status} style={{
-              background: '#fff', borderRadius: 8, padding: '10px 16px',
-              display: 'flex', flexDirection: 'column', gap: 4, minWidth: 120,
-            }}>
-              <StatusBadge status={status} />
-              <span style={{ fontSize: 22, fontWeight: 700, color: 'var(--color-forest)', fontFamily: 'var(--font-fraunces)' }}>
-                {count}
-              </span>
-            </div>
-          ))}
-          {Object.keys(metrics.orders.byStatus).length === 0 && (
-            <p style={{ color: 'var(--color-text-muted)', fontSize: 14 }}>No orders yet.</p>
-          )}
+      {/* Charts section */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: 16 }}>
+        {/* Order Volume Chart */}
+        <div style={{ background: '#fff', borderRadius: 8, padding: 24, border: '1px solid rgba(107,125,86,0.15)' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-forest)', marginBottom: 20, fontFamily: 'var(--font-inter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Order Volume
+          </h3>
+          <div style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={mockChartData}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(107,125,86,0.1)" />
+                <XAxis dataKey="name" fontSize={11} axisLine={false} tickLine={false} />
+                <YAxis fontSize={11} axisLine={false} tickLine={false} />
+                <Tooltip 
+                  contentStyle={{ borderRadius: 8, border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: 12 }}
+                  cursor={{ fill: 'rgba(107,125,86,0.05)' }}
+                />
+                <Bar dataKey="orders" fill="var(--color-sage)" radius={[4, 4, 0, 0]} barSize={32} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Order Status Pie Chart */}
+        <div style={{ background: '#fff', borderRadius: 8, padding: 24, border: '1px solid rgba(107,125,86,0.15)' }}>
+          <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-forest)', marginBottom: 20, fontFamily: 'var(--font-inter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            Status Distribution
+          </h3>
+          <div style={{ height: 260 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={Object.entries(metrics.orders.byStatus).map(([name, value]) => ({ name: STATUS_LABELS[name] ?? name, value }))}
+                  innerRadius={60}
+                  outerRadius={80}
+                  paddingAngle={5}
+                  dataKey="value"
+                >
+                  {Object.keys(metrics.orders.byStatus).map((key, index) => (
+                    <Cell key={`cell-${index}`} fill={STATUS_COLORS[key] ?? '#8b949e'} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
       {/* Recent orders */}
-      <div style={{ background: 'var(--color-bone-light)', borderRadius: 12, padding: 24, boxShadow: '0 1px 8px rgba(58,68,46,0.07)' }}>
-        <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-forest)', marginBottom: 16, fontFamily: 'var(--font-fraunces)' }}>
+      <div style={{ background: '#fff', borderRadius: 8, padding: 24, border: '1px solid rgba(107,125,86,0.15)' }}>
+        <h3 style={{ fontSize: 14, fontWeight: 700, color: 'var(--color-forest)', marginBottom: 20, fontFamily: 'var(--font-inter)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Recent Orders
         </h3>
         <div style={{ overflowX: 'auto' }}>

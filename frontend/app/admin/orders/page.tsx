@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Bag2, ArrowUp2, ArrowDown2 } from 'iconsax-react';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -130,7 +131,7 @@ export default function OrdersPage() {
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-text-muted)' }}>Loading orders…</div>
         ) : orders.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-text-muted)' }}>
-            <div style={{ fontSize: 32, marginBottom: 8 }}>🛒</div>
+            <Bag2 size={64} variant="Bulk" color="var(--color-sage)" style={{ opacity: 0.2, marginBottom: 16 }} />
             <div style={{ fontWeight: 600 }}>No orders found</div>
           </div>
         ) : (
@@ -168,8 +169,8 @@ export default function OrdersPage() {
                         {new Date(order.created_at).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: '2-digit' })}
                       </td>
                       <td style={tdStyle}>
-                        <span style={{ color: 'var(--color-text-muted)', fontSize: 11 }}>
-                          {expandedId === order.id ? '▲' : '▼'}
+                        <span style={{ color: 'var(--color-text-muted)', display: 'flex', alignItems: 'center' }}>
+                          {expandedId === order.id ? <ArrowUp2 size={14} /> : <ArrowDown2 size={14} />}
                         </span>
                       </td>
                     </tr>

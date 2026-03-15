@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
+import logo from '@/app/assets/Green_Black___White_Modern_Creative_Agency_Typography_Logo-removebg-preview.png';
 
 export default function AdminLoginPage() {
   const router = useRouter();
@@ -79,11 +81,12 @@ export default function AdminLoginPage() {
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <div style={{
             width: 56, height: 56, borderRadius: 14,
-            background: 'var(--color-forest)',
+            background: 'var(--color-bg)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 12px',
+            overflow: 'hidden',
           }}>
-            <span style={{ color: '#fff', fontWeight: 700, fontSize: 24, fontFamily: 'var(--font-fraunces)' }}>W</span>
+            <Image src={logo} alt="WafriAI" width={56} height={56} style={{ objectFit: 'contain' }} />
           </div>
           <h1 style={{ fontSize: 22, fontFamily: 'var(--font-fraunces)', color: 'var(--color-forest)', fontWeight: 700 }}>
             WafriAI Admin
