@@ -33,7 +33,7 @@ import React, {
 import { useRouter } from 'next/navigation';
 
 import { useWebSocketContext } from './WebSocketProvider';
-import { Notification, CloseSquare } from 'iconsax-react';
+import { Notification, CloseSquare, Location } from 'iconsax-react';
 import { useMediaPipeline } from '@/app/hooks/useMediaPipeline';
 import { useGeolocation } from '@/app/hooks/useGeolocation';
 
@@ -543,9 +543,12 @@ export function FieldVetSession() {
     ? `calc(${payButtonVisible ? '256px' : '170px'} + var(--spacing-safe-bottom))`
     : productRowBottom;
   // MediaControls bottom position — sitting just above the cart badge or pay button area
-  const mediaControlsBottom = payButtonVisible
-    ? 'calc(180px + var(--spacing-safe-bottom))'
-    : 'calc(100px + var(--spacing-safe-bottom))';
+  const hasProducts = products.length > 0;
+  const mediaControlsBottom = hasProducts
+    ? 'calc(355px + var(--spacing-safe-bottom))'
+    : payButtonVisible
+      ? 'calc(180px + var(--spacing-safe-bottom))'
+      : 'calc(100px + var(--spacing-safe-bottom))';
 
   return (
     <main
@@ -564,6 +567,7 @@ export function FieldVetSession() {
         videoRef={videoRef}
         canvasRef={canvasRef}
         isCapturing={isCapturing}
+        isCameraPaused={isCameraPaused}
         permissionError={permissionError}
         connectionState={connectionState}
         onFirstTap={handleFirstTap}
@@ -671,23 +675,25 @@ export function FieldVetSession() {
           style={{
             position: 'absolute',
             top: 'calc(14px + var(--spacing-safe-top))',
-            right: '76px',
+            left: '16px',
             zIndex: 64,
-            maxWidth: '40vw',
-            minHeight: '38px',
+            minHeight: '42px',
             borderRadius: '999px',
-            border: '1px solid var(--color-border)',
-            background: 'color-mix(in srgb, var(--color-surface-2) 80%, transparent)',
+            border: '1.5px solid var(--color-white)',
+            background: '#000000',
             color: 'var(--color-white)',
-            padding: '0 12px',
-            fontSize: '12px',
+            padding: '0 16px',
+            fontSize: '14px',
             fontWeight: 700,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
             whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
             backdropFilter: 'blur(10px)',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
           }}
         >
+          <Location size={18} variant="Bold" color="var(--color-white)" />
           {effectiveConfirmedLocation}
         </button>
       )}
@@ -813,8 +819,10 @@ export function FieldVetSession() {
         style={{
           position: 'absolute',
           bottom: mediaControlsBottom,
-          right: '16px',
+          right: hasProducts ? '50%' : '16px',
+          transform: hasProducts ? 'translateX(50%)' : 'none',
           zIndex: 35,
+          transition: 'all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)',
         }}
       >
         <MediaControls
@@ -823,6 +831,7 @@ export function FieldVetSession() {
           onToggleMute={toggleMute}
           onToggleCamera={toggleCamera}
           isVisible={isCapturing}
+          orientation={hasProducts ? 'horizontal' : 'vertical'}
         />
       </div>
 

@@ -26,6 +26,8 @@ export interface CameraViewProps {
   /** Non-null when getUserMedia permission was denied or unavailable. */
   permissionError: string | null;
   connectionState: ConnectionState;
+  /** True when the user has manually cut the camera feed. */
+  isCameraPaused: boolean;
   /**
    * Called on the first screen tap before capture starts.
    * Must call resumeContext() + activateMic() to unlock Web Audio + camera.
@@ -43,6 +45,7 @@ export function CameraView({
   connectionState,
   onFirstTap,
   onRetryConnection,
+  isCameraPaused,
 }: CameraViewProps) {
   const hasActivatedRef = useRef(false);
 
@@ -85,9 +88,32 @@ export function CameraView({
           width: '100%',
           height: '100%',
           objectFit: 'cover',
+          opacity: isCameraPaused ? 0 : 1,
+          transition: 'opacity 0.4s ease',
         }}
         aria-label="Live camera preview"
       />
+
+      {/* ── Camera Paused Overlay ─────────────────────────────────────── */}
+      {isCameraPaused && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            background: 'var(--color-bg)',
+            color: 'var(--color-text-muted)',
+            gap: '12px',
+            zIndex: 1,
+          }}
+        >
+          <div style={{ fontSize: '48px', opacity: 0.5 }}>📷</div>
+          <p style={{ fontWeight: 600, fontSize: '15px' }}>Camera is cut</p>
+        </div>
+      )}
 
       {/* ── Hidden canvas for frame capture ─────────────────────────────── */}
       <canvas ref={canvasRef} hidden aria-hidden />
@@ -111,7 +137,7 @@ export function CameraView({
           aria-label="Microphone active"
           style={{
             position: 'absolute',
-            top: 'calc(18px + var(--spacing-safe-top))',
+            top: 'calc(68px + var(--spacing-safe-top))',
             left: '16px',
             width: '14px',
             height: '14px',

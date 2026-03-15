@@ -9,6 +9,7 @@ interface MediaControlsProps {
   onToggleMute: () => void;
   onToggleCamera: () => void;
   isVisible: boolean;
+  orientation?: 'vertical' | 'horizontal';
 }
 
 export function MediaControls({
@@ -17,8 +18,11 @@ export function MediaControls({
   onToggleMute,
   onToggleCamera,
   isVisible,
+  orientation = 'vertical',
 }: MediaControlsProps) {
   if (!isVisible) return null;
+
+  const isHorizontal = orientation === 'horizontal';
 
   const buttonStyle: React.CSSProperties = {
     display: 'flex',
@@ -39,8 +43,8 @@ export function MediaControls({
     <div
       style={{
         display: 'flex',
-        flexDirection: 'column',
-        gap: '12px',
+        flexDirection: isHorizontal ? 'row' : 'column',
+        gap: isHorizontal ? '16px' : '12px',
         animation: 'fade-in 0.3s ease',
       }}
     >
@@ -55,9 +59,9 @@ export function MediaControls({
         aria-label={isCameraPaused ? "Resume camera" : "Pause camera"}
       >
         {isCameraPaused ? (
-          <VideoSlash size={32} color="var(--color-white)" variant="Broken" />
+          <VideoSlash size={isHorizontal ? 24 : 32} color="var(--color-white)" variant="Broken" />
         ) : (
-          <Video size={32} color="var(--color-white)" variant="Linear" />
+          <Video size={isHorizontal ? 24 : 32} color="var(--color-white)" variant="Linear" />
         )}
       </button>
 
@@ -72,9 +76,9 @@ export function MediaControls({
         aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
       >
         {isMuted ? (
-          <MicrophoneSlash size={32} color="var(--color-white)" variant="Broken" />
+          <MicrophoneSlash size={isHorizontal ? 24 : 32} color="var(--color-white)" variant="Broken" />
         ) : (
-          <Microphone2 size={32} color="var(--color-white)" variant="Linear" />
+          <Microphone2 size={isHorizontal ? 24 : 32} color="var(--color-white)" variant="Linear" />
         )}
       </button>
     </div>
