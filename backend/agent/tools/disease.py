@@ -129,7 +129,7 @@ def _embed_query(text: str) -> list[float]:
 def _cosine_similarity_query(query_vec: list[float]) -> list[dict[str, Any]]:
     """
     Run pgvector cosine-similarity search against disease_content.symptom_embedding
-    via the match_disease Supabase RPC function (migration 007 / 015).
+    via the match_disease Supabase RPC function.
 
     Args:
         query_vec: Query embedding vector of length _EMBEDDING_DIMENSIONS.
@@ -137,7 +137,8 @@ def _cosine_similarity_query(query_vec: list[float]) -> list[dict[str, Any]]:
     Returns:
         List of up to _TOP_K dicts with keys:
             id, disease_name, primary_species, risk_level,
-            first_aid_notes, red_flag_notes, similarity
+            first_aid_notes, red_flag_notes, symptoms_text,
+            visual_observations, non_visual_symptoms, treatment_text, similarity
     """
     db = _get_supabase_client()
 
@@ -186,7 +187,9 @@ def _raw_similarity_query(query_vec: list[float]) -> list[dict[str, Any]]:
 
     response = db.table("disease_content").select(
         "id, disease_name, primary_species, risk_level, "
-        "first_aid_notes, red_flag_notes, symptom_embedding"
+        "first_aid_notes, red_flag_notes, symptoms_text, "
+        "visual_observations, non_visual_symptoms, treatment_text, "
+        "symptom_embedding"
     ).not_.is_("symptom_embedding", "null").execute()
 
     raw_rows = response.data
@@ -356,6 +359,12 @@ def search_disease_matches(
                 "primary_species": str(row.get("primary_species", "")),
                 "severity": str(row.get("risk_level", "medium")),
                 "notes": notes,
+                # Differential diagnosis fields — agent uses these to ask
+                # targeted follow-up questions when multiple matches are close.
+                "key_symptoms": str(row.get("symptoms_text") or ""),
+                "visual_observations": str(row.get("visual_observations") or ""),
+                "non_visual_symptoms": str(row.get("non_visual_symptoms") or ""),
+                "typical_management": str(row.get("treatment_text") or ""),
                 "similarity": round(similarity, 6),
             }
         )
@@ -385,13 +394,32 @@ def search_disease_matches(
     )
 
     # ---------------------------------------------------------------------------
-    # Confidence gate — low_confidence: True is the code-visible hallucination
-    # guard. The agent reads this flag and follows the system-prompt rule to
-    # tell the user it is not certain and advise them to consult a licensed vet.
-    # Judges can verify this logic in a single glance.
+    # Confidence gate — low_confidence flag guards against hallucination.
+    # The agent reads this flag and follows the system-prompt rule to tell the
+    # user it is not certain and advise them to consult a licensed vet.
     # ---------------------------------------------------------------------------
     _CONFIDENCE_THRESHOLD = 0.7
     low_confidence = top_similarity < _CONFIDENCE_THRESHOLD
+
+    # ---------------------------------------------------------------------------
+    # Differential gate — needs_clarification flag fires when the top two matches
+    # are too close to call confidently (spread < 0.08).  The agent must ask at
+    # least one targeted follow-up question before presenting a diagnosis.
+    # ---------------------------------------------------------------------------
+    _SPREAD_THRESHOLD = 0.08
+    needs_clarification = (
+        len(matches) >= 2
+        and (matches[0]["similarity"] - matches[1]["similarity"]) < _SPREAD_THRESHOLD
+    )
+
+    if needs_clarification:
+        logger.info(
+            "search_disease_matches: differential gap too narrow "
+            "(%.4f vs %.4f, spread=%.4f) – asking for clarification",
+            matches[0]["similarity"],
+            matches[1]["similarity"],
+            matches[0]["similarity"] - matches[1]["similarity"],
+        )
 
     if low_confidence:
         logger.warning(
@@ -405,6 +433,7 @@ def search_disease_matches(
             "data": {
                 "matches": matches,
                 "low_confidence": True,
+                "needs_clarification": needs_clarification,
                 "best_guess": matches[0] if matches else None,
             },
             "message": (
@@ -418,10 +447,13 @@ def search_disease_matches(
         "data": {
             "matches": matches,
             "low_confidence": False,
+            "needs_clarification": needs_clarification,
         },
         "message": (
             f"Found {len(matches)} possible condition(s). "
             f"Top match: {matches[0]['disease_name']} "
             f"(similarity {top_similarity:.2f})."
+            + (" Ask a clarifying question before presenting a diagnosis."
+               if needs_clarification else "")
         ),
     }
