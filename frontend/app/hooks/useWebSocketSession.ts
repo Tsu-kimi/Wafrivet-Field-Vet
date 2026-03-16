@@ -162,6 +162,10 @@ function sessionReducer(state: SessionState, action: ReducerAction): SessionStat
         ...state,
         cartItems: action.items,
         cartTotal: action.cart_total,
+        // Invalidate any existing checkout link so the Pay button is hidden
+        // until the agent generates a fresh link for the updated cart.
+        checkoutUrl: null,
+        payment_reference: null,
       };
 
     case 'CHECKOUT_LINK':

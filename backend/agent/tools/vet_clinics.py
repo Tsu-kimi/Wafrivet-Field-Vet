@@ -175,12 +175,13 @@ async def _geocode_location(location_query: str) -> tuple[Optional[float], Optio
     return float(lat), float(lon)
 
 
-def _search_nearby(lat: float, lon: float, radius_m: float) -> list[dict[str, Any]]:
+async def _search_nearby(lat: float, lon: float, radius_m: float) -> list[dict[str, Any]]:
     """
     Call the Places API (New) Nearby Search for veterinary clinics.
 
     Returns the raw list of place dicts from the response, or [] on error.
     Never raises — errors are logged and surfaced as empty results.
+    Uses AsyncClient to avoid blocking the asyncio event loop.
     """
     body = {
         "includedTypes": _INCLUDED_TYPES,
@@ -199,12 +200,11 @@ def _search_nearby(lat: float, lon: float, radius_m: float) -> list[dict[str, An
         "X-Goog-FieldMask": _FIELD_MASK,
     }
     try:
-        with httpx.Client(timeout=10.0) as client:
-            resp = client.post(_PLACES_URL, json=body, headers=headers)
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(_PLACES_URL, json=body, headers=headers)
         resp.raise_for_status()
         return resp.json().get("places", [])
     except httpx.HTTPStatusError as exc:
-        # Log sanitised error — never expose the key in logs.
         logger.warning(
             "Places API error: %s %s",
             exc.response.status_code,
@@ -258,77 +258,100 @@ async def find_nearest_vet_clinic(tool_context: ToolContext) -> dict[str, Any]:
     """
     ADK tool — find the nearest veterinary clinics for the farmer's location.
 
-    Resolves coordinates from the farmer's location text (LGA + state, or state
-    alone) using the Google Geocoding API, caches that response for 2 hours in
-    Redis, and then runs a Places Nearby Search from the resolved coordinates.
+    Coordinate resolution priority:
+      1. farmer_lat / farmer_lon already in session state (from device GPS via
+         the LOCATION_DATA WebSocket message) — most accurate, used directly.
+      2. Geocode from farmer_lga + farmer_state text if GPS not present.
+
+    Then runs a Places API (New) Nearby Search with a radius fallback ladder.
 
     Returns:
         {
-            "status": "success" | "error" | "no_results",
+            "status": "success" | "error",
             "data": {
-                "clinics": [...],   # up to 5 clinic objects
-                "radius_m": float,  # effective search radius used
+                "clinics": [...],           # up to 5 clinic objects
+                "radius_m": float,          # effective search radius used
                 "fallback_message": str | None
             },
             "message": str
         }
     """
-    state = tool_context.state
+    session = tool_context.state
 
-    farmer_state = str(state.get("farmer_state") or "").strip()
-    farmer_lga = str(state.get("farmer_lga") or "").strip()
+    # ── Step 1: resolve coordinates ──────────────────────────────────────────
+    # Prefer the precise device GPS that the frontend sent via LOCATION_DATA.
+    raw_lat = session.get("farmer_lat")
+    raw_lon = session.get("farmer_lon")
 
-    if not farmer_state:
-        fallback_msg = (
-            "I need your Nigerian state before I can find the nearest veterinary clinic. "
-            "Please tell me your state and I will check nearby clinics."
-        )
-        return {
-            "status": "success",
-            "data": {
-                "clinics": [],
-                "radius_m": 0,
-                "fallback_message": fallback_msg,
-            },
-            "message": fallback_msg,
-        }
+    lat_f: Optional[float] = None
+    lon_f: Optional[float] = None
 
-    location_query = (
-        f"{farmer_lga}, {farmer_state}, Nigeria"
-        if farmer_lga
-        else f"{farmer_state}, Nigeria"
-    )
-    lat_f, lon_f = await _geocode_location(location_query)
+    if raw_lat is not None and raw_lon is not None:
+        try:
+            lat_f = float(raw_lat)
+            lon_f = float(raw_lon)
+            logger.info(
+                "find_nearest_vet_clinic: using device GPS lat=%.5f lon=%.5f",
+                lat_f, lon_f,
+            )
+        except (TypeError, ValueError):
+            lat_f = None
+            lon_f = None
 
     if lat_f is None or lon_f is None:
+        # No device GPS — fall back to geocoding the text location.
+        farmer_state = str(session.get("farmer_state") or "").strip()
+        farmer_lga   = str(session.get("farmer_lga") or "").strip()
+
+        if not farmer_state:
+            fallback_msg = (
+                "I need your Nigerian state before I can find the nearest "
+                "veterinary clinic. Please tell me your state."
+            )
+            return {
+                "status": "success",
+                "data": {"clinics": [], "radius_m": 0, "fallback_message": fallback_msg},
+                "message": fallback_msg,
+            }
+
+        location_query = (
+            f"{farmer_lga}, {farmer_state}, Nigeria"
+            if farmer_lga
+            else f"{farmer_state}, Nigeria"
+        )
+        logger.info(
+            "find_nearest_vet_clinic: no device GPS — geocoding %r", location_query
+        )
+        lat_f, lon_f = await _geocode_location(location_query)
+
+    if lat_f is None or lon_f is None:
+        farmer_state = str(session.get("farmer_state") or "unknown location").strip()
         return {
             "status": "success",
             "data": {
                 "clinics": [],
                 "radius_m": 0,
                 "fallback_message": (
-                    f"I could not resolve your location from {location_query}. "
+                    f"I could not determine your exact location from {farmer_state}. "
                     "Please confirm your state or local government area and try again."
                 ),
             },
             "message": "Could not resolve location to coordinates.",
         }
 
-    state["farmer_lat"] = lat_f
-    state["farmer_lon"] = lon_f
-
+    # ── Step 2: search with radius fallback ladder ───────────────────────────
     clinics: list[dict[str, Any]] = []
     effective_radius = 0.0
 
-    # Radius fallback ladder: 10 km → 25 km → 50 km
     for radius_m in _RADIUS_FALLBACK:
-        raw_places = _search_nearby(lat_f, lon_f, radius_m)
+        raw_places = await _search_nearby(lat_f, lon_f, radius_m)
         if raw_places:
             clinics = [_normalise_clinic(p) for p in raw_places]
             effective_radius = radius_m
             break
         logger.info(
-            "No vet clinics within %.0f m — expanding search radius", radius_m
+            "No vet clinics within %.0f m of (%.5f, %.5f) — expanding radius",
+            radius_m, lat_f, lon_f,
         )
 
     if not clinics:
@@ -358,9 +381,8 @@ async def find_nearest_vet_clinic(tool_context: ToolContext) -> dict[str, Any]:
     )
 
     logger.info(
-        "find_nearest_vet_clinic: %d clinic(s) found within %.0f m",
-        len(clinics),
-        effective_radius,
+        "find_nearest_vet_clinic: %d clinic(s) found within %.0f m of (%.5f, %.5f)",
+        len(clinics), effective_radius, lat_f, lon_f,
     )
 
     return {

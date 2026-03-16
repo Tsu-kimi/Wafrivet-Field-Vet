@@ -89,7 +89,6 @@ export function FieldVetSession() {
     checkoutUrl,
     payment_reference,
     clinics,
-    clinicsFallbackMessage,
     confirmedLocation,
     lastError,
     isScanningProduct,
@@ -793,7 +792,7 @@ export function FieldVetSession() {
       </div>
 
       {/* ── Clinic card row — slides up from bottom on CLINICS_FOUND (z=28) */}
-      {(clinics.length > 0 || clinicsFallbackMessage) && (
+      {clinics.length > 0 && (
         <div
           style={{
             position: 'absolute',
@@ -803,7 +802,7 @@ export function FieldVetSession() {
             zIndex: 28,
           }}
         >
-          <ClinicCardRow clinics={clinics} fallbackMessage={clinicsFallbackMessage} />
+          <ClinicCardRow clinics={clinics} />
         </div>
       )}
 

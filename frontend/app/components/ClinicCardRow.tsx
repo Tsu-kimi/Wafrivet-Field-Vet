@@ -171,55 +171,23 @@ function ClinicCard({ clinic }: ClinicCardProps) {
   );
 }
 
-// ── Fallback card (shown when no clinics found) ────────────────────────────────
-
-function FallbackCard({ message }: { message: string }) {
-  return (
-    <div
-      style={{
-        minWidth: '280px',
-        background: 'rgba(22, 30, 46, 0.92)',
-        border: '1.5px solid rgba(248,81,73,0.4)',
-        borderRadius: '14px',
-        padding: '16px',
-        flexShrink: 0,
-        backdropFilter: 'blur(12px)',
-        scrollSnapAlign: 'start',
-      }}
-    >
-      <p
-        style={{
-          fontSize: '13px',
-          color: 'var(--color-text)',
-          lineHeight: 1.5,
-          margin: 0,
-        }}
-      >
-        ⚠️ {message}
-      </p>
-    </div>
-  );
-}
-
 // ── Row ────────────────────────────────────────────────────────────────────────
 
-export function ClinicCardRow({ clinics, fallbackMessage }: ClinicCardRowProps) {
+export function ClinicCardRow({ clinics }: ClinicCardRowProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const hasContent = clinics.length > 0 || !!fallbackMessage;
 
   // Trigger slide-up animation on first render with content.
   const triggeredRef = useRef(false);
   useEffect(() => {
-    if (hasContent && !triggeredRef.current) {
+    if (clinics.length > 0 && !triggeredRef.current) {
       triggeredRef.current = true;
-      // Tiny defer so the initial transform is applied before the transition.
       requestAnimationFrame(() => {
         requestAnimationFrame(() => setIsVisible(true));
       });
     }
-  }, [hasContent]);
+  }, [clinics.length]);
 
-  if (!hasContent) return null;
+  if (clinics.length === 0) return null;
 
   return (
     <div
@@ -234,25 +202,17 @@ export function ClinicCardRow({ clinics, fallbackMessage }: ClinicCardRowProps) 
         scrollSnapType: 'x mandatory',
         WebkitOverflowScrolling: 'touch',
         padding: '4px 16px 12px',
-        // Slide-up entrance — starts below the viewport, rises after mount.
         transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
         transition: 'transform 0.35s cubic-bezier(0.22, 1, 0.36, 1)',
-        // Hide scrollbar for cleaner look (mirrors ProductCardRow).
         scrollbarWidth: 'none',
         msOverflowStyle: 'none',
       } as React.CSSProperties}
     >
-      {clinics.length > 0
-        ? clinics.map((clinic, i) => (
-            <div key={`${clinic.name}-${i}`} role="listitem">
-              <ClinicCard clinic={clinic} />
-            </div>
-          ))
-        : fallbackMessage && (
-            <div role="listitem">
-              <FallbackCard message={fallbackMessage} />
-            </div>
-          )}
+      {clinics.map((clinic, i) => (
+        <div key={`${clinic.name}-${i}`} role="listitem">
+          <ClinicCard clinic={clinic} />
+        </div>
+      ))}
     </div>
   );
 }
