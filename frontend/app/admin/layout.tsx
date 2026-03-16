@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Image from 'next/image';
-import { Element3, Box, Bag2, Profile2User, SidebarLeft, SidebarRight } from 'iconsax-react';
+import { Element3, Box, Bag2, Profile2User, MessageQuestion, SidebarLeft, SidebarRight } from 'iconsax-react';
 import logo from '@/app/assets/w.svg';
 import { AdminCtx, type AdminUser } from './admin-context';
 
@@ -14,6 +14,7 @@ const NAV = [
   { href: '/admin/products', label: 'Products', icon: '⬡' },
   { href: '/admin/orders', label: 'Orders', icon: '⬡' },
   { href: '/admin/users', label: 'Users', icon: '⬡' },
+  { href: '/admin/support', label: 'Support', icon: '⬡' },
 ];
 
 // ── Main layout component ────────────────────────────────────────────────────
@@ -204,6 +205,7 @@ function NavIcon({ name, active }: { name: string; active: boolean }) {
     Products: <Box size={size} color={color} variant={variant} />,
     Orders: <Bag2 size={size} color={color} variant={variant} />,
     Users: <Profile2User size={size} color={color} variant={variant} />,
+    Support: <MessageQuestion size={size} color={color} variant={variant} />,
   };
   return <>{icons[name] ?? null}</>;
 }

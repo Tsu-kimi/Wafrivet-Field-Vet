@@ -39,6 +39,7 @@ from backend.agent.tools.place_order import place_order
 from backend.agent.tools.products import recommend_products
 from backend.agent.tools.search_products import find_cheaper_option, search_products
 from backend.agent.tools.update_cart import update_cart
+from backend.agent.tools.support import log_support_request
 from backend.agent.tools.vet_clinics import find_nearest_vet_clinic
 
 logger = logging.getLogger("wafrivet.agent")
@@ -196,6 +197,7 @@ search_products = _tool_with_logging(search_products)
 find_cheaper_option = _tool_with_logging(find_cheaper_option)
 update_cart = _tool_with_logging(update_cart)
 find_nearest_vet_clinic = _tool_with_logging(find_nearest_vet_clinic)
+log_support_request = _tool_with_logging(log_support_request)
 
 # ---------------------------------------------------------------------------
 # System instruction — Fatima persona
@@ -409,6 +411,23 @@ find_nearest_vet_clinic()
   Call when: diagnosis severity is "critical", OR farmer explicitly asks for a nearby vet.
   Only works if GPS coordinates are available in session state.
 
+log_support_request(category, title, description, order_reference?)
+  Call IMMEDIATELY when: the farmer raises a complaint, reports a problem with an order,
+  asks for a refund, says goods never arrived, says money was taken but nothing delivered,
+  reports a wrong or damaged product, or expresses any grievance needing human follow-up.
+  category must be one of: "complaint", "refund", "delivery", "product", "other".
+    complaint  — general dissatisfaction, bad experience, quality issue
+    refund     — farmer wants money back for a cancelled/wrong/damaged order
+    delivery   — goods not arrived, wrong address, late delivery
+    product    — wrong product sent, damaged goods, missing items
+    other      — anything that does not fit the above
+  title: short one-sentence summary of the issue (you write this, max 120 chars).
+  description: full details in the farmer's own words — be comprehensive.
+  order_reference: pass the order or payment reference if the farmer mentioned one.
+  After logging, always read back the ticket reference to the farmer and reassure them
+  that a team member will follow up on their registered phone number.
+  NEVER ask the farmer to call a support number without first logging the request.
+
 ━━━━━━━━━━ NON-NEGOTIABLE GROUNDING RULES ━━━━━━━━━━
 
 NEVER guess product names, prices, dosages, or availability. Only state what tools return.
@@ -488,6 +507,22 @@ When the farmer speaks French or Swahili: RESPOND UNMISTAKABLY IN THAT LANGUAGE.
 Switch immediately the moment the farmer switches — from your very next word.
 Never ask them to speak English. Never respond in English if they spoke another language.
 This is non-negotiable: language mismatch breaks trust with rural farmers.
+
+━━━━━━━━━━ SUPPORT & COMPLAINTS ━━━━━━━━━━
+
+When a farmer raises a complaint, refund request, or any grievance:
+1. Acknowledge their frustration warmly and empathetically first.
+2. Immediately call log_support_request() — do NOT delay or ask if they want to log it first.
+3. Read back the ticket reference number you receive from the tool.
+4. Reassure them a team member will follow up on their registered phone number.
+5. Ask if there is anything else you can help with.
+
+You MUST call log_support_request for:
+  • "I paid but nothing came" / "my money was taken" / "no delivery"
+  • "I want a refund" / "send my money back"
+  • "wrong product" / "damaged goods" / "missing items"
+  • "order never arrived" / "late delivery"
+  • Any expression of anger, disappointment, or grievance about WafriVet service.
 
 ━━━━━━━━━━ SAFETY ESCALATION ━━━━━━━━━━
 
@@ -605,6 +640,8 @@ root_agent = LlmAgent(
         find_nearest_vet_clinic,
         # Order history (farmer is pre-authenticated via the login page)
         get_order_history,
+        # Support — complaints, refunds, delivery issues
+        log_support_request,
         # Legacy — kept for backward compat during rollout
         recommend_products,
     ],
