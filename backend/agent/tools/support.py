@@ -27,8 +27,8 @@ Priority inference guide:
     low        — general feedback, minor inconvenience
 
 Environment variables required:
-    SUPABASE_URL          — Supabase REST URL
-    SUPABASE_SERVICE_KEY  — service role key (bypass RLS for intake writes)
+    SUPABASE_URL               — Supabase REST URL
+    SUPABASE_SERVICE_ROLE_KEY  — service role key (bypass RLS for intake writes)
 """
 
 from __future__ import annotations
@@ -60,10 +60,12 @@ def _get_service_client():
     Used only for inserting support requests — no farmer data is read.
     """
     url = os.environ.get("SUPABASE_URL", "").strip()
-    key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+    # Keep compatibility with the existing codebase convention:
+    # the backend uses SUPABASE_SERVICE_ROLE_KEY everywhere else.
+    key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     if not url or not key:
         raise EnvironmentError(
-            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be set for support tool."
+            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set for support tool."
         )
     from supabase import create_client  # type: ignore
     return create_client(url, key)
