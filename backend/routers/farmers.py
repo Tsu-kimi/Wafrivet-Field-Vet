@@ -69,6 +69,12 @@ class LoginResponse(BaseModel):
 class SetPinRequest(BaseModel):
     phone_number: str = Field(..., pattern=_PHONE_PATTERN)
     pin: str = Field(..., pattern=_PIN_PATTERN, description="Exactly 6 digits.")
+    name: Optional[str] = Field(
+        default=None,
+        min_length=2,
+        max_length=120,
+        description="Farmer name (captured during registration).",
+    )
 
 
 class SetPinResponse(BaseModel):
@@ -307,6 +313,7 @@ async def set_farmer_pin(
         await farmer_service.upsert_by_phone(
             phone_number=body.phone_number,
             session_id=session_id,
+            name=(body.name.strip() if body.name else None),
         )
         await pin_service.set_pin(
             phone_number=body.phone_number,
@@ -342,25 +349,34 @@ async def request_pin_reset(
     The OTP is stored in Redis with a 10-minute TTL. Call /farmers/pin/reset/verify
     with the OTP and new PIN to complete the reset.
     """
-    try:
-        sent = await otp_service.send_reset_otp(phone_number=body.phone_number)
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except Exception:
-        log.exception("otp_request_failed", extra={"session_id": session_id})
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OTP could not be dispatched. Please try again.",
-        )
+    # OTP reset flow temporarily disabled during maintenance.
+    # The original implementation is kept below for reference and will be
+    # restored when OTP service is re-enabled.
+    #
+    # try:
+    #     sent = await otp_service.send_reset_otp(phone_number=body.phone_number)
+    # except ValueError as exc:
+    #     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    # except Exception:
+    #     log.exception("otp_request_failed", extra={"session_id": session_id})
+    #     raise HTTPException(
+    #         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    #         detail="OTP could not be dispatched. Please try again.",
+    #     )
+    #
+    # if not sent:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    #         detail="SMS service is temporarily unavailable. Please try again shortly.",
+    #     )
+    #
+    # log.info("otp_dispatched", extra={"session_id": session_id})
+    # return {"sent": True, "message": "OTP sent to your registered phone number."}
 
-    if not sent:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="SMS service is temporarily unavailable. Please try again shortly.",
-        )
-
-    log.info("otp_dispatched", extra={"session_id": session_id})
-    return {"sent": True, "message": "OTP sent to your registered phone number."}
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="PIN reset via OTP is temporarily unavailable while we perform maintenance.",
+    )
 
 
 @router.post(
@@ -385,48 +401,57 @@ async def verify_otp_and_reset_pin(
 
     The OTP value is NEVER logged. The PIN value is NEVER logged.
     """
-    try:
-        otp_valid = await otp_service.verify_otp(
-            phone_number=body.phone_number,
-            otp_guess=body.otp,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except Exception:
-        log.exception("otp_verify_error", extra={"session_id": session_id})
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="OTP verification failed. Please try again.",
-        )
+    # OTP verification + PIN reset flow temporarily disabled during maintenance.
+    # The original implementation is kept below for reference and will be
+    # restored when OTP service is re-enabled.
+    #
+    # try:
+    #     otp_valid = await otp_service.verify_otp(
+    #         phone_number=body.phone_number,
+    #         otp_guess=body.otp,
+    #     )
+    # except ValueError as exc:
+    #     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    # except Exception:
+    #     log.exception("otp_verify_error", extra={"session_id": session_id})
+    #     raise HTTPException(
+    #         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    #         detail="OTP verification failed. Please try again.",
+    #     )
+    #
+    # if not otp_valid:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_401_UNAUTHORIZED,
+    #         detail="Invalid or expired OTP.",
+    #     )
+    #
+    # try:
+    #     await pin_service.set_pin(
+    #         phone_number=body.phone_number,
+    #         raw_pin=body.new_pin,
+    #         session_id=session_id,
+    #     )
+    #     await farmer_service.clear_pin_lock(
+    #         phone_number=body.phone_number,
+    #         session_id=session_id,
+    #     )
+    # except ValueError as exc:
+    #     raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
+    # except Exception:
+    #     log.exception("pin_reset_set_failed", extra={"session_id": session_id})
+    #     raise HTTPException(
+    #         status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+    #         detail="PIN reset failed. Please try again.",
+    #     )
+    #
+    # await transition_to_active(session_id)
+    # log.info("pin_reset_complete", extra={"session_id": session_id})
+    # return {"ok": True, "message": "PIN reset successfully. You can now log in."}
 
-    if not otp_valid:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired OTP.",
-        )
-
-    try:
-        await pin_service.set_pin(
-            phone_number=body.phone_number,
-            raw_pin=body.new_pin,
-            session_id=session_id,
-        )
-        await farmer_service.clear_pin_lock(
-            phone_number=body.phone_number,
-            session_id=session_id,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc))
-    except Exception:
-        log.exception("pin_reset_set_failed", extra={"session_id": session_id})
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="PIN reset failed. Please try again.",
-        )
-
-    await transition_to_active(session_id)
-    log.info("pin_reset_complete", extra={"session_id": session_id})
-    return {"ok": True, "message": "PIN reset successfully. You can now log in."}
+    raise HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail="OTP verification and PIN reset are temporarily unavailable while we perform maintenance.",
+    )
 
 
 @router.get(

@@ -93,7 +93,7 @@ def _send_termii_security_alert(phone: str, attempts: int) -> None:
     'security_alert_sent' structured log entry.
     """
     api_key = os.environ.get("TERMII_API_KEY", "").strip()
-    sender_id = os.environ.get("TERMII_SENDER_ID", "WafriVet").strip()
+    sender_id = os.environ.get("TERMII_SENDER_ID", "N-Alert").strip() or "N-Alert"
     if not api_key:
         log.warning("termii_key_missing_for_security_alert")
         return

@@ -28,7 +28,7 @@ def main() -> int:
             "Send a test SMS via Termii using the same code path as OTP SMS.\n\n"
             "Requirements:\n"
             "  - TERMII_API_KEY must be set in the environment\n"
-            "  - Optional: TERMII_SENDER_ID (defaults to 'WafriVet')\n\n"
+            "  - Optional: TERMII_SENDER_ID (defaults to 'N-Alert')\n\n"
             "Example:\n"
             "  python scripts/test_termii_sms.py +2347012345678 "
             "'WafriVet test SMS – if you received this, Termii is working.'"
@@ -53,7 +53,7 @@ def main() -> int:
         return 1
 
     print(f"Sending Termii SMS to {args.phone!r} ...")
-    print(f"Using sender ID: {os.environ.get('TERMII_SENDER_ID', 'WafriVet')!r}")
+    print(f"Using sender ID: {os.environ.get('TERMII_SENDER_ID', 'N-Alert')!r}")
 
     try:
         msg_id = _send_otp_sms(args.phone, args.message)

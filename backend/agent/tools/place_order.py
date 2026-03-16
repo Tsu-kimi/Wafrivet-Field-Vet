@@ -26,7 +26,7 @@ in the returned message — Fatima rephrases naturally.
 Environment variables required:
     SUPABASE_DB_URL  – asyncpg DSN (Supabase transaction pooler, port 6543)
     TERMII_API_KEY   – Termii API secret key
-    TERMII_SENDER_ID – Approved Termii sender ID (default: WafriVet)
+    TERMII_SENDER_ID – Approved Termii sender ID (default: N-Alert)
 """
 
 from __future__ import annotations
@@ -60,6 +60,7 @@ def _send_termii_sms(
     order_ref: str,
     items: list[dict[str, Any]],
     total: float,
+    customer_name: Optional[str] = None,
 ) -> bool:
     """
     Send an order-confirmation SMS via the Termii messaging API.
@@ -68,8 +69,8 @@ def _send_termii_sms(
 
     Returns True on successful dispatch, False on error.
     """
-    api_key   = os.environ.get("TERMII_API_KEY", "").strip()
-    sender_id = os.environ.get("TERMII_SENDER_ID", "WafriVet").strip()
+    api_key = os.environ.get("TERMII_API_KEY", "").strip()
+    sender_id = os.environ.get("TERMII_SENDER_ID", "N-Alert").strip() or "N-Alert"
 
     if not api_key:
         logger.warning(
@@ -80,18 +81,22 @@ def _send_termii_sms(
 
     # Format item summary (truncated to keep SMS under 160 chars)
     if len(items) == 1:
-        item_line = (
-            f"{items[0]['quantity']}x {items[0]['product_name'][:30]}"
-        )
+        first = items[0] if items else {}
+        qty = int(first.get("quantity") or 1)
+        product_name = str(first.get("product_name") or "Product")
+        item_line = f"{qty}x {product_name[:30]}"
     else:
         item_line = f"{len(items)} items"
 
+    display_name = (customer_name or "").strip() or "Customer"
     sms_body = (
-        f"WafriVet Order Confirmed!\n"
-        f"Ref: {order_ref}\n"
-        f"Items: {item_line}\n"
-        f"Total: NGN {total:,.2f}\n"
-        f"We will contact you to arrange delivery. Thank you!"
+        f"Dear {display_name},  "
+        f"WafriVet Order Confirmed! "
+        f"Ref: {order_ref} "
+        f"Items: {item_line} "
+        f"Total: NGN {total:,.2f} "
+        "We will contact you to arrange delivery. "
+        "Thank you powered by Kuro Amai Studios"
     )
 
     # Strip the leading + before E.164 number (Termii uses number without +)
@@ -103,7 +108,7 @@ def _send_termii_sms(
         "from":      sender_id,
         "sms":       sms_body,
         "type":      "plain",
-        "channel":   "generic",
+        "channel":   "dnd",
     }).encode("utf-8")
 
     req = urllib.request.Request(
@@ -194,6 +199,7 @@ async def place_order(
     placed_at: str = ""
     sms_phone: str = phone
     cart_id: str = ""
+    customer_name: str = ""
 
     try:
         async with rls_context(auth_session_id, phone=phone) as conn:
@@ -280,6 +286,18 @@ async def place_order(
             if selected_addr and selected_addr["delivery_phone"]:
                 sms_phone = str(selected_addr["delivery_phone"]).strip() or phone
 
+            farmer_row = await conn.fetchrow(
+                """
+                SELECT name
+                  FROM public.farmers
+                 WHERE phone_number = $1
+                 LIMIT 1
+                """,
+                phone,
+            )
+            if farmer_row and farmer_row["name"]:
+                customer_name = str(farmer_row["name"]).strip()
+
             if resolved_address:
                 await conn.execute(
                     """
@@ -320,7 +338,7 @@ async def place_order(
         }
 
     # ── 2. Dispatch Termii SMS (sync urllib — safe to call from async) ──────
-    sms_sent = _send_termii_sms(sms_phone, order_ref, items, total)
+    sms_sent = _send_termii_sms(sms_phone, order_ref, items, total, customer_name=customer_name)
 
     if sms_sent:
         try:

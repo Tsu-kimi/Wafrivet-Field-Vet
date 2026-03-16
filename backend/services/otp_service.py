@@ -47,14 +47,15 @@ def _termii_channels() -> list[str]:
     Return ordered Termii channels to try.
 
     TERMII_CHANNELS can be set as a comma-separated list, e.g.
-    "dnd,generic". Defaults to a resilient fallback order.
+    "dnd,generic". Defaults to DND for production delivery.
     """
     configured = os.environ.get("TERMII_CHANNELS", "").strip()
     if configured:
         channels = [c.strip() for c in configured.split(",") if c.strip()]
         if channels:
             return channels
-    return ["generic"]
+    # Default to DND to ensure delivery to DND-registered numbers.
+    return ["dnd"]
 
 
 def _otp_key(phone: str) -> str:
@@ -94,7 +95,7 @@ def _send_otp_sms(phone: str, message_suffix: str = "") -> Optional[str]:
     Never logs the OTP. Returns the Termii message_id on success, None on error.
     """
     api_key = os.environ.get("TERMII_API_KEY", "").strip()
-    sender_id = os.environ.get("TERMII_SENDER_ID", "WafriVet").strip()
+    sender_id = os.environ.get("TERMII_SENDER_ID", "N-Alert").strip() or "N-Alert"
     if not api_key:
         log.warning("termii_key_missing_for_otp")
         return None

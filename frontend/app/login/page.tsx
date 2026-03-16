@@ -27,6 +27,7 @@ const FARMER_KEY  = 'wafrivet_farmer';  // localStorage key for logged-in farmer
 
 type Step =
   | 'phone'         // Enter phone number
+  | 'name'          // Collect name for registration
   | 'pin'           // Enter existing PIN
   | 'pin_setup'     // Create new PIN (first time, post-OTP reset, or register)
   | 'otp_request'   // Enter phone to receive OTP (forgot PIN)
@@ -150,6 +151,7 @@ export default function LoginPage() {
   const [step, setStep]               = useState<Step>('phone');
   const [phone, setPhone]             = useState('');
   const [phoneE164, setPhoneE164]     = useState('');
+  const [name, setName]               = useState('');
   const [pin, setPin]                 = useState('');
   const [pinConfirm, setPinConfirm]   = useState('');
   const [otp, setOtp]                 = useState('');
@@ -183,8 +185,8 @@ export default function LoginPage() {
       return;
     }
     setPhoneE164(e164);
-    // Register: skip login attempt, go straight to PIN creation.
-    setStep(mode === 'register' ? 'pin_setup' : 'pin');
+    // Register: collect name first, then proceed to PIN creation.
+    setStep(mode === 'register' ? 'name' : 'pin');
   };
 
   // ── Step 2: PIN login ─────────────────────────────────────────────────────
@@ -250,7 +252,7 @@ export default function LoginPage() {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone_number: phoneE164, pin }),
+        body: JSON.stringify({ phone_number: phoneE164, pin, name: name.trim() || null }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -260,7 +262,7 @@ export default function LoginPage() {
       // PIN set — now log in.
       localStorage.setItem(
         FARMER_KEY,
-        JSON.stringify({ phone: phoneE164, name: null }),
+        JSON.stringify({ phone: phoneE164, name: name.trim() || null }),
       );
       router.replace('/');
     } catch {
@@ -502,6 +504,123 @@ export default function LoginPage() {
           </div>
         )}
 
+        {/* ── Step 1b: Name (registration) ───────────────────────────────── */}
+        {step === 'name' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            <div style={{ textAlign: 'center' }}>
+              <p style={{ fontSize: '15px', color: 'var(--color-text)', marginBottom: '4px' }}>
+                What should we call you?
+              </p>
+              <p style={{ fontSize: '18px', fontWeight: 700, color: 'var(--color-primary)', margin: 0 }}>
+                {maskPhone(phoneE164)}
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <label
+                htmlFor="name"
+                style={{ fontSize: '14px', fontWeight: 600, color: 'var(--color-text)', marginLeft: '4px' }}
+              >
+                Full Name
+              </label>
+              <input
+                id="name"
+                type="text"
+                placeholder="Your full name"
+                autoFocus
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  clearError();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    const trimmed = name.trim();
+                    if (trimmed.length < 2) {
+                      setError('Please enter your full name.');
+                      return;
+                    }
+                    setStep('pin_setup');
+                  }
+                }}
+                style={{
+                  width: '100%',
+                  padding: '16px 20px',
+                  borderRadius: '16px',
+                  border: '2px solid var(--color-bone)',
+                  background: 'var(--color-bone-light)',
+                  fontSize: '16px',
+                  color: 'var(--color-text)',
+                  outline: 'none',
+                  transition: 'border-color 0.2s',
+                }}
+              />
+            </div>
+
+            {error && (
+              <div
+                style={{
+                  padding: '12px 16px',
+                  borderRadius: '12px',
+                  background: 'color-mix(in srgb, var(--color-error) 10%, white)',
+                  color: 'var(--color-error)',
+                  fontSize: '13px',
+                  fontWeight: 500,
+                  border: '1px solid color-mix(in srgb, var(--color-error) 20%, transparent)',
+                }}
+              >
+                {error}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  const trimmed = name.trim();
+                  if (trimmed.length < 2) {
+                    setError('Please enter your full name.');
+                    return;
+                  }
+                  setStep('pin_setup');
+                }}
+                disabled={loading}
+                style={{
+                  width: '100%',
+                  padding: '18px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'var(--color-primary)',
+                  color: 'var(--color-white)',
+                  fontSize: '16px',
+                  fontWeight: 700,
+                  cursor: loading ? 'not-allowed' : 'pointer',
+                  opacity: loading ? 0.7 : 1,
+                  boxShadow: '0 8px 24px color-mix(in srgb, var(--color-primary) 30%, transparent)',
+                  transition: 'all 0.2s',
+                }}
+              >
+                Continue
+              </button>
+              <button
+                onClick={() => {
+                  setStep('phone');
+                  clearError();
+                }}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'var(--color-text-muted)',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                ← Back
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* ── Step 2: PIN ────────────────────────────────────────────────── */}
         {(step === 'pin' || step === 'pin_setup') && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', textAlign: 'center' }}>
@@ -557,6 +676,7 @@ export default function LoginPage() {
                   setStep('phone');
                   setPin('');
                   setPinConfirm('');
+                  setName('');
                   clearError();
                 }}
                 style={{
