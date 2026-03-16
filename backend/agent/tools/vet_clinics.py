@@ -202,8 +202,18 @@ async def _search_nearby(lat: float, lon: float, radius_m: float) -> list[dict[s
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.post(_PLACES_URL, json=body, headers=headers)
+        payload = resp.json()
         resp.raise_for_status()
-        return resp.json().get("places", [])
+        places = payload.get("places") or []
+        if not places:
+            logger.info(
+                "Places API returned zero results for lat=%.5f lon=%.5f radius_m=%.0f payload_snippet=%s",
+                lat,
+                lon,
+                radius_m,
+                json.dumps(payload)[:400],
+            )
+        return places
     except httpx.HTTPStatusError as exc:
         logger.warning(
             "Places API error: %s %s",
