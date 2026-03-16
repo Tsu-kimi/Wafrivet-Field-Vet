@@ -8,8 +8,9 @@ import { adminSupabase } from '@/app/lib/admin-supabase';
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  context: any,
 ) {
+  const { params } = context ?? {};
   const admin = await requireAdmin(req);
   if (!admin) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
