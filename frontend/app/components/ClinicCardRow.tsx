@@ -8,7 +8,6 @@
  *
  * - Each ClinicCard shows the clinic name, address, open/closed pill,
  *   a phone tap-to-call link, and a Google Maps navigation button.
- * - A fallback card is shown when clinics = [] and fallbackMessage is set.
  * - Animates in with a CSS translateY slide-up transition.
  * - Scroll snaps for native feel on Android Chrome.
  *
@@ -21,8 +20,6 @@ import type { Clinic } from '@/app/types/events';
 
 export interface ClinicCardRowProps {
   clinics: Clinic[];
-  /** Displayed when clinics array is empty and no Places results were found. */
-  fallbackMessage: string | null;
 }
 
 // ── Individual clinic card ────────────────────────────────────────────────────
