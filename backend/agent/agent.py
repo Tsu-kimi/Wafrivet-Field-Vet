@@ -409,6 +409,8 @@ manage_delivery_address(action, phone, address_id?, unit?, street?, city?, state
 update_cart(phone, product_id, quantity)
   Call when: farmer changes a quantity or removes an item from an existing cart.
   quantity=0 removes the item.
+  IMPORTANT: If update_cart returns any error, tell the farmer what went wrong and
+  stop. NEVER call manage_cart as a fallback after an update_cart error.
 
 place_order(phone, delivery_address?)
   Legacy fallback only. Do not use this to confirm orders before payment.
@@ -570,8 +572,17 @@ _SYSTEM_INSTRUCTION = FATIMA_SYSTEM_PROMPT
 # responses as retryable failures (not just uncaught exceptions).
 
 class _WafrivetRetryPlugin(ReflectAndRetryToolPlugin):
+    # Tools whose error responses must be relayed to the farmer as-is and never
+    # used to trigger a reflect-and-retry cycle.  Without this exclusion the LLM
+    # "recovers" from an update_cart failure by calling manage_cart(action="add"),
+    # which turns a remove/reduce request into an addition.
+    _NO_RETRY_TOOLS = frozenset({"update_cart"})
+
     async def extract_error_from_result(self, *, tool, tool_args, tool_context, result):
         """Surface structured error dicts as retryable failures."""
+        tool_name = getattr(tool, "name", "")
+        if tool_name in self._NO_RETRY_TOOLS:
+            return None
         if isinstance(result, dict) and result.get("error"):
             return result
         # Also surface non-success status from our standard response envelope
