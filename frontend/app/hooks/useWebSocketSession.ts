@@ -93,6 +93,8 @@ type ReducerAction =
   | { type: 'AGENT_SPEAKING'; value: boolean }
   | { type: 'TRANSCRIPTION'; event: TranscriptionEvent }
   | { type: 'PRODUCTS_RECOMMENDED'; products: Product[] }
+  | { type: 'CLEAR_PRODUCTS' }
+  | { type: 'CLEAR_CLINICS' }
   | { type: 'CART_UPDATED'; items: CartItem[]; cart_total: number }
   | { type: 'CHECKOUT_LINK'; checkout_url: string; payment_reference: string }
   | { type: 'LOCATION_CONFIRMED'; state: string }
@@ -218,6 +220,12 @@ function sessionReducer(state: SessionState, action: ReducerAction): SessionStat
       // Clear scanning indicator when products arrive after a camera scan.
       return { ...state, products: action.products, isScanningProduct: false };
 
+    case 'CLEAR_PRODUCTS':
+      return { ...state, products: [] };
+
+    case 'CLEAR_CLINICS':
+      return { ...state, clinics: [], clinicsFallbackMessage: null };
+
     case 'PAYMENT_CONFIRMED':
       return {
         ...state,
@@ -257,6 +265,18 @@ export function useWebSocketSession({
   const mountedRef      = useRef(true);
   const connectRef      = useRef<(() => void) | null>(null);
   const manualRetryRef  = useRef(false);
+
+  /**
+   * Tracks consecutive AI turns that contained no product/cart event.
+   * Reset to 0 when PRODUCTS_RECOMMENDED or CART_UPDATED arrives.
+   * When it reaches 2, the product strip is auto-dismissed.
+   */
+  const turnsWithoutProductsRef = useRef(0);
+  /**
+   * Tracks consecutive AI turns that contained no clinics event.
+   * Reset to 0 when CLINICS_FOUND arrives. Dismissed after 2 quiet turns.
+   */
+  const turnsWithoutClinicsRef = useRef(0);
 
   /**
    * Mirror of state.confirmedLocation kept in a ref so the reconnect
@@ -346,6 +366,19 @@ export function useWebSocketSession({
         case 'TURN_COMPLETE':
           dispatch({ type: 'AGENT_SPEAKING', value: false });
           dispatch({ type: 'CLEAR_SCANNING' });
+          // Auto-dismiss product strip: if 2 consecutive turns had no product
+          // or cart event, the topic has moved on — clear the cards.
+          turnsWithoutProductsRef.current += 1;
+          if (turnsWithoutProductsRef.current >= 2) {
+            dispatch({ type: 'CLEAR_PRODUCTS' });
+            turnsWithoutProductsRef.current = 0;
+          }
+          // Auto-dismiss clinic strip similarly.
+          turnsWithoutClinicsRef.current += 1;
+          if (turnsWithoutClinicsRef.current >= 2) {
+            dispatch({ type: 'CLEAR_CLINICS' });
+            turnsWithoutClinicsRef.current = 0;
+          }
           break;
 
         case 'TRANSCRIPTION':
@@ -353,6 +386,7 @@ export function useWebSocketSession({
           break;
 
         case 'PRODUCTS_RECOMMENDED':
+          turnsWithoutProductsRef.current = 0;
           dispatch({ type: 'PRODUCTS_RECOMMENDED', products: raw.products });
           break;
 
@@ -372,6 +406,8 @@ export function useWebSocketSession({
           break;
 
         case 'CART_UPDATED':
+          // Cart activity means the user is still in the product/commerce flow.
+          turnsWithoutProductsRef.current = 0;
           dispatch({
             type: 'CART_UPDATED',
             items: raw.items,
@@ -392,6 +428,7 @@ export function useWebSocketSession({
           break;
 
         case 'CLINICS_FOUND':
+          turnsWithoutClinicsRef.current = 0;
           dispatch({
             type: 'CLINICS_FOUND',
             clinics: raw.clinics,

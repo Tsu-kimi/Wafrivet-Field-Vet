@@ -59,6 +59,24 @@ _GENERIC_PRODUCT_WORDS = (
     "treatments",
 )
 
+# Strip conversational filler that pollutes the semantic embedding and degrades
+# retrieval precision. These are patterns that appear when the model passes the
+# farmer's raw speech as the query instead of extracting the search intent.
+_CONVERSATIONAL_PREFIX_RE = re.compile(
+    r"^(can you (give|show|find|search|list|get)( me)?( all| some| any)?|"
+    r"please (find|give|show|list|search)( me)?|"
+    r"i (want|need|would like)( to (see|buy|get|find))?|"
+    r"do you have( any| some)?|"
+    r"what (are|do you have for|can you recommend for)|"
+    r"give me( all| some| a list of)?|"
+    r"show me( all| some)?|"
+    r"find me( some| all)?|"
+    r"search for|"
+    r"look for|"
+    r"recommend( me)?( some| any)?)\s+",
+    re.IGNORECASE,
+)
+
 
 # ---------------------------------------------------------------------------
 # Lazy singleton clients
@@ -222,21 +240,38 @@ def _shape_result(row: dict[str, Any], rank: int) -> dict[str, Any]:
 
 
 def _enrich_query_for_species_intent(query: str) -> str:
-    """Expand generic animal queries so hybrid retrieval anchors to vet commerce intent."""
-    lowered = query.lower()
+    """
+    Strip conversational prefixes and expand generic animal queries so hybrid
+    retrieval anchors to vet commerce intent rather than natural-language noise.
+
+    Two-step pipeline:
+      1. Remove conversational filler (e.g. "can you give me all") that dilutes
+         the embedding and lowers retrieval precision.
+      2. If the cleaned query contains generic product words (medicine, drugs …)
+         together with a known livestock species, append a veterinary context tail
+         so the embedding space aligns to vet-commerce documents.
+    """
+    # Step 1 — strip conversational prefixes
+    cleaned = _CONVERSATIONAL_PREFIX_RE.sub("", query).strip()
+    if not cleaned:
+        cleaned = query  # safety fallback — never return empty
+
+    lowered = cleaned.lower()
+
+    # Step 2 — species intent expansion for generic queries
     if not any(word in lowered for word in _GENERIC_PRODUCT_WORDS):
-        return query
+        return cleaned
 
     matched_species: list[str] = []
     for canonical, aliases in _SPECIES_HINTS.items():
-        if any(re.search(rf"\\b{re.escape(alias)}\\b", lowered) for alias in aliases):
+        if any(re.search(rf"\b{re.escape(alias)}\b", lowered) for alias in aliases):
             matched_species.append(canonical)
 
     if not matched_species:
-        return query
+        return cleaned
 
     species_tail = ", ".join(dict.fromkeys(matched_species))
-    return f"{query} veterinary medicines and treatments for {species_tail}"
+    return f"{cleaned} veterinary medicines and treatments for {species_tail}"
 
 
 # ---------------------------------------------------------------------------
